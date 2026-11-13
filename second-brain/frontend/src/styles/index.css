@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Second Brain design tokens: "the ops desk the night before print".
+   Marked-up paperwork, not a neon dashboard. Evidence is highlighted
+   like a highlighter on paper; changed values read like a ledger.
+
+   Signal hues are named by meaning, muted like printed ink:
+     work  = an agent is acting       (ballpoint blue)
+     wait  = retry, waiting, unsure   (ochre)
+     fail  = failure, quarantine, high severity (brick)
+     ok    = verified, applied        (bottle green)
+     note  = evidence and memory      (highlighter)
+   Day is the default because the demo runs on a projector.
+   ------------------------------------------------------------------ */
+:root,
+:root[data-theme="light"] {
+  --bg: #e6e9ec;
+  --bg-2: #dde1e5;
+  --surface: #f6f7f8;
+  --surface-2: #eceef1;
+  --line: #c6ccd3;
+  --line-soft: #d7dbe0;
+  --text: #141b24;
+  --muted: #4c5763;
+  --faint: #737d88;
+  --work: #1f5e9c;
+  --work-soft: rgba(31, 94, 156, 0.1);
+  --wait: #955600;
+  --wait-soft: rgba(196, 128, 20, 0.14);
+  --fail: #ad2a20;
+  --fail-soft: rgba(173, 42, 32, 0.09);
+  --ok: #1f6d45;
+  --ok-soft: rgba(31, 109, 69, 0.1);
+  --note: #6a5200;
+  --note-soft: rgba(245, 205, 40, 0.42);
+  --overlay: rgba(20, 27, 36, 0.38);
+  --shadow: 0 12px 32px -12px rgba(20, 27, 36, 0.28);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #17191c;
+  --bg-2: #1c1f23;
+  --surface: #212429;
+  --surface-2: #292d33;
+  --line: #3a3f47;
+  --line-soft: #2e3238;
+  --text: #e8eaed;
+  --muted: #a3aab3;
+  --faint: #737a83;
+  --work: #84abd8;
+  --work-soft: rgba(132, 171, 216, 0.13);
+  --wait: #dba552;
+  --wait-soft: rgba(219, 165, 82, 0.14);
+  --fail: #e2786a;
+  --fail-soft: rgba(226, 120, 106, 0.13);
+  --ok: #74c193;
+  --ok-soft: rgba(116, 193, 147, 0.13);
+  --note: #e8cd5c;
+  --note-soft: rgba(232, 205, 92, 0.2);
+  --overlay: rgba(0, 0, 0, 0.5);
+  --shadow: 0 14px 36px -14px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-work: var(--work);
+  --color-work-soft: var(--work-soft);
+  --color-wait: var(--wait);
+  --color-wait-soft: var(--wait-soft);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-note: var(--note);
+  --color-note-soft: var(--note-soft);
+  /* Schibsted Grotesk: a news-desk grotesk built for dense, small-size reading */
+  --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+  /* IBM Plex Mono only for literal identifiers: e-19, oa-2, budget.set_line */
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* radius scale: tight, paper-like */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+/* tabular figures only where numbers line up; this face makes punctuation tabular too */
+.font-mono, .tnum { font-variant-numeric: tabular-nums; }
+::selection { background: var(--note-soft); }
+:focus-visible { outline: 2px solid var(--work); outline-offset: 2px; border-radius: var(--radius-sm); }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+/* ---------- impact reveal: nodes light up in the order impact reaches them ---------- */
+@keyframes reach {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+.node-hit { animation: reach 420ms ease-out both; }
+
+/* working indicator: a slow dim, never a flash */
+@keyframes working { 50% { opacity: 0.35; } }
+.working { animation: working 1.6s ease-in-out infinite; }
+
+/* where you landed after following an evidence link */
+@keyframes arrived { from { background: var(--note-soft); } to { background: transparent; } }
+.arrived { animation: arrived 1.8s ease-out; }
+
+@keyframes cell-changed { from { background: var(--ok-soft); } to { background: transparent; } }
+.cell-changed { animation: cell-changed 2.4s ease-out; }
+
+/* evidence = highlighter on the source text */
+mark.evidence {
+  background: linear-gradient(transparent 12%, var(--note-soft) 12%, var(--note-soft) 92%, transparent 92%);
+  color: inherit;
+  padding: 0 1px;
+}
+
+/* ledger-style change: old value struck, new value beside it */
+.was { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--faint); }
+
+/* skeletons */
+@keyframes shimmer { 50% { opacity: 0.55; } }
+.skeleton { background: var(--surface-2); border-radius: var(--radius-sm); animation: shimmer 1.3s ease-in-out infinite; }
+
+/* tiny spinner for steps that are running */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 0.8s linear infinite; display: inline-block; }
+
+/* React Flow theming */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--muted);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--line);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-edge-label-color: var(--muted);
+}
+.react-flow__attribution { background: transparent; opacity: 0.6; }
+.react-flow__attribution a { color: var(--faint); font-size: 9px; }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+.react-flow__controls-button svg { fill: var(--muted); }
+.react-flow__edge-text { fill: var(--muted); font-size: 10px; font-family: var(--font-sans); }
+.react-flow__handle { opacity: 0; width: 4px; height: 4px; min-width: 0; min-height: 0; border: 0; }
+.react-flow__node:focus-visible { outline: none; }
+.react-flow__node:focus-visible > div { outline: 2px solid var(--work); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}

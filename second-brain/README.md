@@ -1,4 +1,4 @@
-# Second Brain: Track B backend (P0)
+# Second Brain: Track B (backend + frontend)
 
 A sponsor changes their commitment (TechNova: ₹5L to ₹3L). The system:
 
@@ -12,7 +12,17 @@ A sponsor changes their commitment (TechNova: ₹5L to ₹3L). The system:
 8. verifies ten invariants;
 9. logs every step with evidence.
 
-## Run
+## Run the demo
+
+One command starts both servers (it creates the virtualenv and installs dependencies the first time):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File second-brain\run-demo.ps1
+```
+
+Then open http://localhost:5173. The console talks to this backend through the Vite proxy (`/api` to port 8000). If the backend is not running, the console falls back to a built-in simulator so the demo still works offline; the header says which one you are on. See [frontend/README.md](frontend/README.md) and [frontend/INTEGRATION.md](frontend/INTEGRATION.md).
+
+## Run the backend on its own
 
 ```bash
 py -3.13 -m venv .venv
@@ -63,6 +73,8 @@ backend/
   llm.py            Claude structured output (messages.parse), cache, fallback
   seed/             workspace.json, messages.json
   tests/            registry, knowledge, end-to-end scenarios
+frontend/           React console + landing page; src/backend/http/adapter.ts maps this API onto the UI
+run-demo.ps1        starts backend and frontend together
 ```
 
 ## Not built yet (P1/P2 in the plan)
@@ -74,4 +86,8 @@ backend/
 - Compensation (saga)
 - Precondition-drift demo endpoint
 - Evaluation harness
-- Frontend
+
+## Known backend edge cases (found while integrating)
+
+- **Fallback, then a new change:** after a run that used the fallback path (budget tool failing, lines flagged as pending), a later change for the same sponsor does not clear or replace the earlier pending reductions. V4 then fails on every replan and the run escalates.
+- **Repair after an outside edit:** `/api/debug/corrupt` during a run is caught by V3, but the replan skips steps already done in that run (`done_keys` and the idempotency check), so the plan is empty and the run escalates instead of re-applying the fix.
