@@ -1,5 +1,5 @@
 # HACKINNO
-HackInnovision Problem STatement.
+HackInnovision Problem Statement.
 
 ## Track B: Second Brain (agentic workflow automation & context engineering)
 
