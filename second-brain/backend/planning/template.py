@@ -29,16 +29,27 @@ def _inr(n: int) -> str:
     return ("-₹" if n < 0 else "₹") + s
 
 
-def target_gap(rc: ResolvedChange, option: Option | None, budget_rejected: bool) -> int:
-    if rc.shortfall <= 0:
-        return 0
-    if option is None or budget_rejected:
-        return rc.shortfall
-    return option.open_gap
+def target_gap(gap_now: int, option: Option | None, budget_rejected: bool) -> int:
+    """The open gap to record: what the chosen option leaves uncovered, or everything when
+    there is no option (or the human rejected the budget change)."""
+    if option is not None and not budget_rejected:
+        return option.open_gap
+    return max(0, gap_now)
+
+
+# Declarative "set X, expecting Y" writes. Re-applying one is safe when the live value has
+# drifted from the target, which is how a verification failure gets repaired in the same run.
+REPAIRABLE = {"tracker.set_committed", "tracker.set_tier", "tracker.set_gap", "budget.set_lines",
+              "approvals.update", "deliverables.set", "calendar.set_status"}
 
 
 def build(run_id: str, version: int, rc: ResolvedChange, option: Option | None, *,
-          rejected_keys: set[str], degraded_tools: set[str], done_keys: set[str]) -> list[PlannedAction]:
+          rejected_keys: set[str], degraded_tools: set[str], done_keys: set[str],
+          repair: bool = False, gap_now: int | None = None) -> list[PlannedAction]:
+    """repair=True when replanning after a failed verification: a write already applied in
+    this run is planned again (under a fresh idempotency scope) if its target has drifted."""
+    if gap_now is None:
+        gap_now = rc.shortfall
     sid, ev = rc.sponsor_id, [rc.change_id]
     sponsor = db.query_one("SELECT * FROM sponsors WHERE id=?", (sid,))
     name = sponsor["name"].split()[0]
@@ -48,18 +59,25 @@ def build(run_id: str, version: int, rc: ResolvedChange, option: Option | None, 
     def add(key: str, tool: str, args: dict, rationale: str, deps: list[str] | None = None,
             money: int | None = None, extra_ev: list[str] | None = None) -> str | None:
         nonlocal n
-        if key in rejected_keys or key in done_keys:
+        if key in rejected_keys:
             return None
         # cross-run convergence: identical write already applied for this change -> nothing to do
         identity = {k: v for k, v in args.items() if k != "approval_id"}
-        if db.query_one("SELECT 1 FROM idempotency WHERE key=?", (idem_key(tool, identity, rc.change_id),)):
-            return None
+        applied = key in done_keys or bool(
+            db.query_one("SELECT 1 FROM idempotency WHERE key=?", (idem_key(tool, identity, rc.change_id),)))
+        scope = None
+        if applied:
+            # The planner only reaches this line when the live value differs from the target.
+            # After a failed verification that means drift (an outside edit): apply it again.
+            if not (repair and tool in REPAIRABLE):
+                return None
+            scope = f"repair-v{version}"
         n += 1
         aid = f"a{version}-{n}"
         live_deps = [d for d in (deps or []) if d]
         actions.append(PlannedAction(id=aid, key=key, tool=tool, args=args, depends_on=live_deps,
-                                     rationale=rationale, evidence_refs=ev + (extra_ev or []),
-                                     money_delta=money))
+                                     rationale=rationale if not scope else f"Repair after an outside edit: {rationale}",
+                                     evidence_refs=ev + (extra_ev or []), money_delta=money, idem_scope=scope))
         return aid
 
     # 1. sponsor record
@@ -79,19 +97,22 @@ def build(run_id: str, version: int, rc: ResolvedChange, option: Option | None, 
     # 3. budget lines (or the degraded path)
     budget_rejected = "budget.lines" in rejected_keys
     a_budget = None
+    pending = {p["line_id"]: p["intended_amount"]
+               for p in db.query("SELECT line_id, intended_amount FROM pending_updates WHERE status='pending'")}
+    desired_pending: dict[str, int] = {}
     if option and not budget_rejected:
         lines = {l["id"]: l for l in db.query("SELECT * FROM budget_lines")}
-        pending = {p["line_id"] for p in db.query("SELECT line_id FROM pending_updates WHERE status='pending'")}
         changes = [{"line_id": k, "new": v, "expect": lines[k]["amount"]}
                    for k, v in sorted(option.cuts.items()) if lines[k]["amount"] != v]
         money = -sum(c["expect"] - c["new"] for c in changes)
         desc = ", ".join(f"{lines[c['line_id']]['category']} {_inr(c['expect'])}→{_inr(c['new'])}" for c in changes)
         if changes and "budget.set_lines" in degraded_tools:
-            todo = [c for c in changes if c["line_id"] not in pending]
-            if todo:
+            # the pending set is replaced as a whole, so intents from an earlier change never linger
+            desired_pending = {c["line_id"]: c["new"] for c in changes}
+            if desired_pending != pending:
                 a_budget = add("budget.pending", "tracker.flag_pending_update",
-                               {"changes": todo, "note": f"Budget sheet unavailable; apply option {option.id} "
-                                                         f"manually ({rc.change_id})"},
+                               {"changes": changes, "note": f"Budget sheet unavailable; apply option {option.id} "
+                                                            f"manually ({rc.change_id})"},
                                "Budget tool is failing; record the intended changes as pending (degraded path).",
                                [a_commit], money)
                 add("comms.treasurer_pending", "comms.chat",
@@ -100,11 +121,17 @@ def build(run_id: str, version: int, rc: ResolvedChange, option: Option | None, 
                     "Hand the failed budget change to the treasurer.", [a_budget])
         elif changes:
             a_budget = add("budget.lines", "budget.set_lines", {"changes": changes},
-                           f"Cover the {_inr(rc.shortfall)} shortfall with option {option.id} "
+                           f"Cover the {_inr(max(gap_now, 0))} shortfall with option {option.id} "
                            f"({option.name}): {desc}.", [a_commit], money)
+    if pending and not a_budget and pending != desired_pending:
+        # an earlier fallback left intents that no longer match any target: withdraw them
+        a_budget = add("budget.pending_clear", "tracker.flag_pending_update",
+                       {"changes": [], "note": f"Superseded by {rc.change_id}"},
+                       "Withdraw budget changes left pending by an earlier fallback; they no longer apply.",
+                       [a_commit])
 
     # 4. open gap in the tracker
-    gap = target_gap(rc, option, budget_rejected)
+    gap = target_gap(gap_now, option, budget_rejected)
     cur_gap = db.query_one("SELECT amount FROM gaps WHERE sponsor_id=?", (sid,))
     if (cur_gap["amount"] if cur_gap else 0) != gap:
         add("tracker.gap", "tracker.set_gap",

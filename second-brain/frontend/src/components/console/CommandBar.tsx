@@ -138,7 +138,7 @@ export function Toolbar() {
         <Button size="sm" variant="ghost" onClick={redeliver} disabled={state !== 'DONE'} title="Deliver e-19 again, as a duplicate webhook would. Nothing should apply twice">
           Deliver e-19 again
         </Button>
-        <Button size="sm" variant="ghost" onClick={corrupt} disabled={!canCorrupt} title={profile.caps.preemption ? 'Someone re-enables the keynote outside the system after the run. Verification must catch it' : 'Someone re-enables the keynote outside the system while the run waits for an approval. Its verification must catch it before the run can finish'}>
+        <Button size="sm" variant="ghost" onClick={corrupt} disabled={!canCorrupt} title={profile.caps.preemption ? 'Someone re-enables the keynote outside the system after the run. Verification must catch it' : 'Someone re-enables the keynote outside the system while the run waits for an approval. Its verification catches it and the replan puts it back before the run finishes'}>
           Edit outside the system
         </Button>
         <Button size="sm" variant="quiet" onClick={reset}>Reset</Button>

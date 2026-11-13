@@ -21,7 +21,7 @@ The UI talks to a backend through one interface, `src/backend/Backend.ts`:
 | `resolved` | `entity.resolved` plus a synthesised `computed` (shortfall, tiers, deliverable changes) |
 | `confidence {score,band,reasons:["+0.25 …"]}` | `confidence` with parsed `{delta,label}` reasons |
 | `impact {nodes:[{node,type,path,severity}]}` | `impact` with a plain-language `why` per node |
-| `options.ready` (`cuts`: line → new amount) | `options` with from/to per line, read from `/api/state` |
+| `options.ready` (`cuts`: line → new amount, `gap`) | `options` with from/to per line, read from `/api/state`; `gap` (what the live budget lacks) updates the shortfall headline |
 | `plan.created` (`key`, `depends_on`, `rationale`) | `plan`: titles generated from tool + args, waves from `depends_on`, v2+ diffed by `key` |
 | `action.status` (`rejected_by_human`, `blocked`) | `action.status` (`rejected`, `blocked`) |
 | `approval.requested {approval_id}` | `approval.requested {approval}`; preview, args and rationale fetched from `/api/approvals` |

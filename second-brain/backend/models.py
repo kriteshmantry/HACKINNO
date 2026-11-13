@@ -88,6 +88,8 @@ class PlannedAction(BaseModel):
     result: Any = None
     error: str | None = None
     approval_id: str | None = None
+    # set on a repair after an outside edit: the write is re-applied under this idempotency scope
+    idem_scope: str | None = None
 
 
 class Plan(BaseModel):

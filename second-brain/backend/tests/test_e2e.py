@@ -128,3 +128,59 @@ def test_verifier_catches_corruption():
     db.execute("UPDATE deliverables SET status='active' WHERE id='d-keynote'")
     rep = verification.verify(r.resolved, r.plan, r.id, r.rejected_keys)
     assert not rep.ok and not next(c for c in rep.checks if c.id == "V3").ok
+
+
+# --- regressions found while integrating the frontend ------------------------------------
+
+def _budget_ok():
+    b = db.budget_summary()
+    uncovered = max(0, b["shortfall"])
+    return uncovered == b["recorded_gap"] + b["pending_reductions"], b
+
+
+def test_new_change_after_a_fallback_supersedes_the_pending_budget():
+    """A fallback run leaves budget reductions pending. A later change for the same sponsor
+    (here the 3.5L relay) must re-size the budget fix to what is actually missing, apply it,
+    and drop the stale pending intents instead of failing V4 forever."""
+    set_fault("budget.set_lines", "always")
+    first = run("e-19")
+    assert first.state == "DONE" and "budget.set_lines" in first.degraded_tools
+    set_fault("budget.set_lines", "off")
+    from backend.tools import breaker
+    breaker.reset()                                    # the budget tool is healthy again
+
+    second = run("c-11")
+    assert second.state == "DONE", (second.outcome, second.meta.get("replan_reason"))
+    assert second.verification.ok, [c for c in second.verification.checks if not c.ok]
+    ok, b = _budget_ok()
+    assert ok, b
+    assert db.query_one("SELECT COUNT(*) n FROM pending_updates")["n"] == 0
+    assert db.query_one("SELECT COUNT(*) n FROM budget_lines WHERE status='pending_update'")["n"] == 0
+
+
+def test_new_change_during_a_lasting_outage_replaces_the_pending_budget():
+    """Same, but the budget tool is still down: the pending intents are replaced by ones
+    sized for the new change, so the treasurer is never asked to apply the old numbers."""
+    set_fault("budget.set_lines", "always")
+    run("e-19")
+    second = run("c-11")
+    assert second.state == "DONE", (second.outcome, second.meta.get("replan_reason"))
+    assert second.verification.ok, [c for c in second.verification.checks if not c.ok]
+    ok, b = _budget_ok()
+    assert ok and b["pending_reductions"] == 150000, b
+
+
+def test_outside_edit_during_a_run_is_repaired_before_it_finishes():
+    """Someone re-enables the keynote while the run waits for its last approval. Verification
+    catches it (V3) and the replan must re-apply the fix rather than come back empty."""
+    def decide(ap):
+        if ap["tool"] == "comms.email":
+            db.execute("UPDATE deliverables SET status='active' WHERE id='d-keynote'")
+        return "approve", None, None
+
+    r = run("e-19", decide=decide)
+    assert r.state == "DONE", (r.outcome, r.meta.get("replan_reason"))
+    assert r.replans >= 1 and r.verification.ok
+    assert db.query_one("SELECT status FROM deliverables WHERE id='d-keynote'")["status"] == "removed"
+    # the repair is a new write, but nothing was applied twice
+    assert next(c for c in r.verification.checks if c.id == "V7").ok

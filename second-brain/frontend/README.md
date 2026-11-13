@@ -40,8 +40,9 @@ src/
 2. Choose **option B**. Approve the budget step, the prize pool amendment and the sponsor email (you can edit its cc first).
 3. The run completes with **10 of 10 checks**. Open **Why?** on any plan step for the evidence chain from the email span to the check.
 4. **Deliver e-19 again**: "Nothing to do", so nothing is applied twice. **Send the “3.5L final” chat**: a new run plans only the difference (TechNova ends at Silver, ₹3,50,000).
-5. Set the budget tool to **Always** fail and run S1: three retries, the circuit opens, and the replan flags the lines for the treasurer instead.
-6. **S2**: confidence 0.30, so a person must confirm the amount before anything changes. **S4**: quarantined at triage.
+5. Set the budget tool to **Always** fail and run S1: three retries, the circuit opens, and the replan flags the lines for the treasurer instead. Sending the 3.5L chat afterwards re-sizes those pending changes.
+6. While a run waits for the sponsor-email approval, press **Edit outside the system**: V3 fails, the replan re-applies the keynote removal, and the run finishes with 10 of 10.
+7. **S2**: confidence 0.30, so a person must confirm the amount before anything changes. **S4**: quarantined at triage.
 
 On the simulator (`?backend=mock`), S3 also shows mid-run preemption and the email edit is learned as a preference.
 

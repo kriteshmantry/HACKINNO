@@ -95,7 +95,13 @@ class FlagPending(BaseModel):
 
 @tool("tracker.flag_pending_update", FlagPending)
 def flag_pending_update(conn, changes, note):
-    """Degraded path: record intended budget changes as pending for a human to apply."""
+    """Degraded path: record intended budget changes as pending for a human to apply.
+    The given changes replace the whole pending set (an empty list withdraws it)."""
+    keep = {c["line_id"] for c in changes}
+    for (line_id,) in conn.execute("SELECT line_id FROM pending_updates").fetchall():
+        if line_id not in keep:
+            conn.execute("DELETE FROM pending_updates WHERE line_id=?", (line_id,))
+            conn.execute("UPDATE budget_lines SET status='ok' WHERE id=? AND status='pending_update'", (line_id,))
     for c in changes:
         cur = _one(conn, "SELECT amount FROM budget_lines WHERE id=?", (c["line_id"],))[0]
         conn.execute("INSERT OR REPLACE INTO pending_updates VALUES (?,?,?,?,?)",
@@ -123,9 +129,12 @@ def set_lines(conn, changes):
         if c["new"] < floor:
             raise PermanentToolError(f"{c['line_id']}: {c['new']} is below floor {floor}")
         conn.execute("UPDATE budget_lines SET amount=?, status='ok' WHERE id=?", (c["new"], c["line_id"]))
-        conn.execute("DELETE FROM pending_updates WHERE line_id=?", (c["line_id"],))
         applied.append({"line_id": c["line_id"], "before": cur, "after": c["new"]})
-    return {"applied": applied, "noop": not applied}
+    # the sheet now holds the real numbers: intents left pending by an earlier fallback are superseded
+    cleared = [r[0] for r in conn.execute("SELECT line_id FROM pending_updates").fetchall()]
+    conn.execute("DELETE FROM pending_updates")
+    conn.execute("UPDATE budget_lines SET status='ok' WHERE status='pending_update'")
+    return {"applied": applied, "cleared_pending": cleared, "noop": not applied and not cleared}
 
 
 # --- organisational approvals ------------------------------------------------------------

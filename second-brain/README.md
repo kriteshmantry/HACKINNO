@@ -87,7 +87,9 @@ run-demo.ps1        starts backend and frontend together
 - Precondition-drift demo endpoint
 - Evaluation harness
 
-## Known backend edge cases (found while integrating)
+## Convergence fixes
 
-- **Fallback, then a new change:** after a run that used the fallback path (budget tool failing, lines flagged as pending), a later change for the same sponsor does not clear or replace the earlier pending reductions. V4 then fails on every replan and the run escalates.
-- **Repair after an outside edit:** `/api/debug/corrupt` during a run is caught by V3, but the replan skips steps already done in that run (`done_keys` and the idempotency check), so the plan is empty and the run escalates instead of re-applying the fix.
+- **Budget fix sized from the live sheet.** Options and the open gap use what the budget actually lacks after the change (`planning.budget_gap`), not just old − new. A successful `budget.set_lines` supersedes any reductions an earlier fallback left pending, and a new fallback replaces the pending set instead of adding to it.
+- **Repair after an outside edit.** When verification fails, the replan re-applies declarative writes whose target has drifted, under a fresh idempotency scope (`PlannedAction.idem_scope`), so the run repairs itself instead of escalating. Nothing is applied twice (V7).
+
+Both are covered by regression tests in `backend/tests/test_e2e.py`.

@@ -177,7 +177,7 @@ export function titleFor(a: any, raw: any | undefined): string {
     case 'tracker.set_committed': return `Set ${sName}’s commitment to ${rupees(args.new)}`
     case 'tracker.set_tier': return `Move ${sName} from ${args.expect} to ${args.new}`
     case 'tracker.set_gap': return args.amount ? `Record an open gap of ${rupees(args.amount)}` : 'Clear the open gap'
-    case 'tracker.flag_pending_update': return `Flag ${lineCount} budget line${lineCount === 1 ? '' : 's'} for the treasurer to apply`
+    case 'tracker.flag_pending_update': return lineCount ? `Flag ${lineCount} budget line${lineCount === 1 ? '' : 's'} for the treasurer to apply` : 'Withdraw budget changes left pending by an earlier fallback'
     case 'budget.set_lines': return `Rebalance ${lineCount} budget line${lineCount === 1 ? '' : 's'}`
     case 'approvals.update': {
       const oa = find('org_approvals', args.org_approval_id)
@@ -303,6 +303,7 @@ export class EventTranslator {
   private world?: WorldState
   private running?: string
   private checks: VerifyCheck[] = []
+  private computed?: Record<string, any>
 
   constructor(private runId: string, private api: AdapterApi) {}
 
@@ -369,8 +370,8 @@ export class EventTranslator {
         const oldEnt = ENTITLEMENTS[p.old_tier] ?? {}, newEnt = ENTITLEMENTS[p.new_tier] ?? {}
         const diff = Object.keys(oldEnt).filter((k2) => oldEnt[k2] !== newEnt[k2])
           .map((k2) => newEnt[k2] == null ? `${kindName(k2)} removed` : `${kindName(k2)} ${oldEnt[k2] ?? 'none'} → ${newEnt[k2]}`)
-        push('computed', `Shortfall ${rupees(p.shortfall)}; tier ${p.old_tier} → ${p.new_tier} (computed in code)`,
-          { shortfall: p.shortfall, old_tier: p.old_tier, new_tier: p.new_tier, income_before: income, income_after: income - p.shortfall, deliverable_diff: diff }, 'Knowledge')
+        this.computed = { shortfall: p.shortfall, old_tier: p.old_tier, new_tier: p.new_tier, income_before: income, income_after: income - p.shortfall, deliverable_diff: diff }
+        push('computed', `Shortfall ${rupees(p.shortfall)}; tier ${p.old_tier} → ${p.new_tier} (computed in code)`, this.computed, 'Knowledge')
         break
       }
       case 'confidence': {
@@ -394,6 +395,11 @@ export class EventTranslator {
       }
       case 'options.ready': {
         await this.refreshWorld()
+        // the backend sizes options by what the budget actually lacks, which can differ from old − new
+        if (typeof p.gap === 'number' && this.computed && p.gap !== this.computed.shortfall) {
+          this.computed = { ...this.computed, shortfall: p.gap }
+          push('computed', `Budget gap ${rupees(p.gap)} (read from the live budget)`, this.computed, 'Planning')
+        }
         push('options', e.message, mapOptions(p.options ?? [], this.raw))
         if ((p.wait_s ?? 0) > 0) push('agent.status', 'Waiting for you to choose an option', { agent: 'Planning', status: 'waiting', note: 'Waiting for you to choose an option' }, 'Planning')
         break

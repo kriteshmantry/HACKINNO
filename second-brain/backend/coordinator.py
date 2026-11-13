@@ -220,9 +220,10 @@ class Coordinator:
         self.run.options = opts
         if opts:
             rec = next(o for o in opts if o.recommended)
-            p.emit("options.ready", f"Shortfall ₹{self.run.resolved.shortfall:,}: {len(opts)} options; "
+            gap = planning.budget_gap(self.run.resolved)
+            p.emit("options.ready", f"Shortfall ₹{gap:,}: {len(opts)} options; "
                    f"recommended {rec.id} ({rec.name})", {"options": [o.model_dump() for o in opts],
-                                                           "wait_s": self.run.option_wait_s})
+                                                           "wait_s": self.run.option_wait_s, "gap": gap})
             save(self.run)
             choice = None
             if self.run.option_wait_s > 0:
@@ -244,7 +245,7 @@ class Coordinator:
         plan, errors = planning.make_plan(
             self.run.id, version, self.run.resolved, self.run.impact, self.G, option,
             rejected_keys=set(self.run.rejected_keys), degraded_tools=set(self.run.degraded_tools),
-            done_keys=done)
+            done_keys=done, repair=bool(self.run.meta.pop("repair", False)))
         self.run.plan = plan
         self.run.meta["validation_errors"] = errors
         p.emit("plan.created", f"Plan v{version}: {len(plan.actions)} actions, "
@@ -306,6 +307,7 @@ class Coordinator:
         else:
             self.run.meta["replan_reason"] = [f"{c.id} failed: expected {c.expected}, got {c.actual}"
                                               for c in rep.checks if not c.ok]
+            self.run.meta["repair"] = True      # the live state drifted: re-apply what no longer holds
             self.transition("REPLAN")
 
     async def on_replan(self) -> None:

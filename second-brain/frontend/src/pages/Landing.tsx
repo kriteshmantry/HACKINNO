@@ -42,7 +42,7 @@ const SAFEGUARDS: ReactNode[][] = [
   ['The message is vague', 'Confidence is scored in code from the sender, a regex cross-check, hedge words and corroboration. Below 0.50 nothing is written.', 'Scenario S2 scores 0.30 and drafts a question instead'],
   ['A tool keeps failing', 'Three retries with backoff, then the circuit opens and the replan swaps in a safe fallback: flag the lines and ask the treasurer.', 'Break the budget tool, set to Always'],
   ['Something leaves the organisation that should not', 'Emails and chat posts wait in an outbox and only leave with an approval that shows a dry-run diff and the evidence.', 'Any approval dialog'],
-  ['Someone edits a record outside the system', 'Ten invariants are re-read from live data before a run can finish. A failure triggers a targeted replan; if two replans cannot fix it, the run is handed to a person with the failing checks.', 'Edit outside the system while a run waits for an approval'],
+  ['Someone edits a record outside the system', 'Ten invariants are re-read from live data before a run can finish. A failure triggers a replan that re-applies only what drifted; if two replans cannot fix it, the run is handed to a person with the failing checks.', 'Edit outside the system while a run waits for an approval'],
   ['A message tries to give the system orders', 'Triage quarantines it before any agent, prompt or plan sees it.', 'Scenario S4'],
   ['Newer information arrives later', 'Every step says “set X, expecting Y”, so a new run plans only what still differs from the target.', 'Finish S1, then Send the “3.5L final” chat'],
 ]

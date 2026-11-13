@@ -75,8 +75,10 @@ async def execute(plan: Plan, ctx: RunCtx, on_change: Callable[[], None]) -> Exe
             a.args = args
         set_status(a, "running")
         meta: dict = {}
+        # a repair re-applies a write already made for this change, so it needs its own key
+        actx = ctx if not a.idem_scope else RunCtx(ctx.run_id, f"{ctx.change_id}#{a.idem_scope}", ctx.agent, ctx.allowlist)
         try:
-            result = await invoke(a.tool, args, ctx, meta=meta)
+            result = await invoke(a.tool, args, actx, meta=meta)
             set_status(a, "skipped_duplicate" if meta.get("duplicate") else "done", result=result)
         except PreconditionFailed as e:
             set_status(a, "failed", error=f"precondition: {e}")
