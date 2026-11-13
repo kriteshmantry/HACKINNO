@@ -2,48 +2,31 @@ import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useRun } from '@/store/runStore'
 import type { ScenarioId } from '@/lib/types'
-import { CommandBar, Toolbar } from '@/components/console/CommandBar'
-import { InboxPanel } from '@/components/console/InboxPanel'
-import { ImpactGraph } from '@/components/console/ImpactGraph'
-import { AgentRelay } from '@/components/console/AgentRelay'
-import { ConfidenceMeter } from '@/components/console/ConfidenceMeter'
-import { ActionLog } from '@/components/console/ActionLog'
-import { Dock } from '@/components/console/Dock'
+import { backend } from '@/backend'
+import { Skeleton } from '@/components/ui'
+import { SimpleHeader } from '@/components/simple/Header'
+import { Story } from '@/components/simple/Story'
+import { Panels, SideRail } from '@/components/simple/Side'
 import { ApprovalModal } from '@/components/console/ApprovalModal'
 import { ContextInspector, TraceDrawer } from '@/components/console/Drawers'
-import { ClarifyCard, OutcomeBanner, Toast } from '@/components/console/Feedback'
-import { backend } from '@/backend'
-import { Button, Skeleton } from '@/components/ui'
+import { Toast } from '@/components/console/Feedback'
 
-function StartCard() {
-  const state = useRun((s) => s.state)
-  const runId = useRun((s) => s.runId)
-  if (runId || state !== 'IDLE') return null
+/** Same layout as the loaded console, so nothing jumps when data arrives. */
+function ConsoleSkeleton() {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center px-3">
-      <div className="pointer-events-auto w-full max-w-[520px] rounded-md border border-line bg-surface px-4 py-3.5">
-        <p className="text-[14px] font-semibold">This is {backend.profile.eventName}, the night before banner print.</p>
-        <p className="mt-0.5 text-[12.5px] text-muted">TechNova is a Gold sponsor at ₹5,00,000 and the budget balances at ₹13L. Start with S1 to watch one email ripple through everything above.</p>
-        <Button variant="primary" className="mt-3" onClick={() => useRun.getState().start('S1')}>Run S1: TechNova cuts to ₹3L</Button>
+    <div aria-busy="true" aria-label="Loading the event workspace" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="space-y-2.5">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-md border border-line-soft px-4 py-3.5">
+            <Skeleton className="h-4 w-48" /><Skeleton className="mt-2 h-3" style={{ width: `${70 - i * 6}%` }} />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3">
+        <div className="h-56 rounded-md border border-line-soft p-4"><Skeleton className="h-3.5 w-28" /></div>
+        <div className="h-64 rounded-md border border-line-soft p-4"><Skeleton className="h-3.5 w-24" /></div>
       </div>
     </div>
-  )
-}
-
-/** Same grid as the loaded console, so nothing jumps when data arrives. */
-function ConsoleSkeleton() {
-  const block = (h: string, rows = 3) => (
-    <div className={`${h} min-h-0 rounded-md border border-line bg-surface p-3.5 xl:h-auto`}>
-      <Skeleton className="mb-4 h-3.5 w-28" />
-      {Array.from({ length: rows }, (_, i) => <Skeleton key={i} className="mb-2.5 h-3" style={{ width: `${88 - i * 11}%` }} />)}
-    </div>
-  )
-  return (
-    <main aria-busy="true" aria-label="Loading the event workspace" className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 xl:min-h-0 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(320px,360px)]">
-      {block('h-[420px]', 8)}
-      <div className="grid min-h-0 gap-3 xl:grid-rows-[minmax(0,1.3fr)_minmax(0,1fr)]">{block('h-[520px]', 4)}{block('h-[400px]', 4)}</div>
-      <div className="grid min-h-0 gap-3 xl:grid-rows-[auto_auto_minmax(0,1fr)]">{block('h-auto', 5)}{block('h-auto', 3)}{block('h-[300px]', 5)}</div>
-    </main>
   )
 }
 
@@ -77,29 +60,18 @@ export default function Console() {
   }, [runId])
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg xl:h-screen">
-      <CommandBar />
-      <Toolbar />
+    <div className="min-h-screen bg-bg">
+      <SimpleHeader />
       {error && <div className="border-b border-fail/40 bg-fail-soft px-4 py-2 text-[13px] text-fail">{error}. Start the FastAPI server, or open this page with <span className="font-mono">?backend=mock</span> to use the simulator.</div>}
-      {!ready ? (
-        <ConsoleSkeleton />
-      ) : (
-        <main className="grid flex-1 grid-cols-[minmax(0,1fr)] gap-3 p-3 xl:min-h-0 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)_minmax(320px,360px)]">
-          <div className="h-[420px] min-h-0 xl:h-auto"><InboxPanel /></div>
-          <div className="relative grid min-h-0 gap-3 xl:grid-rows-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            <div className="h-[520px] min-h-0 xl:h-auto"><ImpactGraph /></div>
-            <div className="h-[560px] min-h-0 xl:h-auto"><Dock /></div>
-            <OutcomeBanner />
-            <ClarifyCard />
-            <StartCard />
+      <main className="mx-auto max-w-[1180px] px-4 py-5">
+        {!ready ? <ConsoleSkeleton /> : (
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <Story />
+            <SideRail />
           </div>
-          <div className="grid min-h-0 gap-3 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
-            <AgentRelay />
-            <ConfidenceMeter />
-            <div className="h-[420px] min-h-0 xl:h-auto"><ActionLog /></div>
-          </div>
-        </main>
-      )}
+        )}
+      </main>
+      <Panels />
       <ApprovalModal />
       <TraceDrawer />
       <ContextInspector />

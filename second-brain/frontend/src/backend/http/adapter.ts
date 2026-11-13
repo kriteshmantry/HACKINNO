@@ -458,7 +458,7 @@ export class EventTranslator {
       case 'clarification.requested':
         push('clarification.requested', e.message, {
           clarification: {
-            question: String(p.question).replace(/₹(\d{5,})/g, (_m: string, n: string) => rupees(Number(n))),
+            question: String(p.question).replace(/₹([\d,]{5,})/g, (_m: string, n: string) => rupees(Number(n.replace(/,/g, '')))),
             reasons: (p.reasons ?? []).filter((r: string) => !/base$/.test(r))
               .map((r: string) => r.replace(/^([+-]?\d\.\d+)\s+(.*)$/, (_m: string, d: string, t: string) => `${t.replace(/^\w/, (c) => c.toUpperCase())} (${d.startsWith('-') ? '−' + d.slice(1) : d.startsWith('+') ? d : '+' + d})`)),
             draft: p.draft,

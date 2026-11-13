@@ -84,6 +84,8 @@ interface Store extends RunSlice {
   traceAction?: string
   contextAgent?: AgentId
   toast?: { text: string; tone: 'note' | 'ok' | 'wait' | 'fail'; key: number }
+  /** which detail view is open over the story */
+  panel?: 'map' | 'inbox' | 'log' | 'changes'
 
   init(): Promise<void>
   start(s: ScenarioId): Promise<void>
@@ -204,7 +206,7 @@ export const useRun = create<Store>((set, get) => {
       case 'approval.requested': {
         const ap = p.approval as Approval
         patch.approvals = { ...s.approvals, [ap.id]: ap }
-        if (!s.modalApproval && !s.modalDismissed) patch.modalApproval = ap.id
+        // approvals appear inline in the story; the dialog opens only when you ask to review one
         break
       }
       case 'approval.decided':
@@ -410,6 +412,6 @@ export const useRun = create<Store>((set, get) => {
 
     set(k, v) { set({ [k]: v } as Partial<Store>) },
     openApproval(id) { set({ modalApproval: id, modalDismissed: !id }) },
-    focusMsg(id) { set({ focusMessage: { id, key: Date.now() } }) },
+    focusMsg(id) { set({ focusMessage: { id, key: Date.now() }, panel: 'inbox' }) },
   }
 })

@@ -28,11 +28,16 @@ src/
     mock/logic.ts         impact propagation, shortfall solver, target-state planner, risk, V1–V10
     mock/engine.ts        coordinator state machine, approvals, retries, breaker, idempotency, preemption
   store/runStore.ts       event-sourced Zustand store: one reducer, every panel derives from events
-  components/console/     CommandBar, InboxPanel, ImpactGraph, AgentRelay, ConfidenceMeter, ActionLog,
-                          Dock (Options, Plan, Before and after, Checks, Memory), ApprovalModal,
-                          TraceDrawer, ContextInspector, OutcomeBanner, Toast
+  components/simple/      the console: Header (scenario + demo menus), Story (five stages with inline
+                          decisions), Side (who is working, activity feed, map/inbox/log/changes panels)
+  components/console/     building blocks it opens on demand: ImpactGraph, InboxPanel, ActionLog,
+                          BeforeAfter, ApprovalModal, TraceDrawer, ContextInspector, Toast
   pages/Landing.tsx, pages/Console.tsx
 ```
+
+## How the console reads
+
+One run is one story in five stages: read the message, find what it affects, choose how to cover the gap, make the changes, check the result. The active stage is open, finished stages collapse to a one-line summary, and anything that needs you (an option, an approval, a confirmation) appears inside its stage marked "Needs you". The map, full inbox, full log and complete before/after open on demand. Fault injection and the other demo switches live under **Demo controls**.
 
 ## Demo script (against the backend)
 

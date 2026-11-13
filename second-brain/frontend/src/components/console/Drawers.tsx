@@ -6,7 +6,7 @@ import { useRun } from '@/store/runStore'
 import type { ContextPacket, TraceLink } from '@/lib/types'
 import { Chip, CloseButton, Mono, Skeleton } from '../ui'
 
-function Drawer({ open, onClose, title, sub, children }: { open: boolean; onClose: () => void; title: ReactNode; sub?: ReactNode; children: ReactNode }) {
+export function Drawer({ open, onClose, title, sub, children }: { open: boolean; onClose: () => void; title: ReactNode; sub?: ReactNode; children: ReactNode }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && open) onClose() }
     window.addEventListener('keydown', k)
@@ -67,7 +67,7 @@ export function TraceDrawer() {
   const close = () => set('traceAction', undefined)
   const go = (l: TraceLink) => {
     if (l.kind === 'message' && l.ref) { focusMsg(l.ref); close() }
-    if (l.kind === 'graph' && l.ref) { set('selectedNode', l.ref); close() }
+    if (l.kind === 'graph' && l.ref) { set('selectedNode', l.ref); set('panel', 'map'); close() }
   }
   return (
     <Drawer open={!!actionId} onClose={close} title="Why did this happen?" sub={<>The evidence chain for <Mono>{actionId}</Mono>, from the message that started it to the check that confirmed it.</>}>
