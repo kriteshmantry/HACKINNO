@@ -1,0 +1,78 @@
+{
+  "sponsors": [
+    {"id": "s-technova",   "name": "TechNova Pvt Ltd", "tier": "Gold",   "committed_amount": 500000, "received_amount": 100000, "status": "active", "domain": "technova.io",    "contact": "rohan.mehta@technova.io"},
+    {"id": "s-brightbank", "name": "BrightBank",       "tier": "Silver", "committed_amount": 250000, "received_amount": 250000, "status": "active", "domain": "brightbank.com", "contact": "events@brightbank.com"},
+    {"id": "s-codekart",   "name": "CodeKart",         "tier": "Silver", "committed_amount": 200000, "received_amount": 0,      "status": "active", "domain": "codekart.in",    "contact": "partners@codekart.in"},
+    {"id": "s-zestly",     "name": "Zestly",           "tier": "Bronze", "committed_amount": 50000,  "received_amount": 50000,  "status": "active", "domain": "zestly.co",      "contact": "hello@zestly.co"}
+  ],
+  "other_income": [
+    {"id": "inc-grant", "source": "College grant", "amount": 200000},
+    {"id": "inc-reg",   "source": "Registrations", "amount": 100000}
+  ],
+  "budget_lines": [
+    {"id": "bl-prizes",      "category": "Prizes",      "amount": 300000, "floor": 150000, "priority": 3, "funded_by": "s-technova", "cuttable": 1, "public": 1, "owner": "p-treasurer"},
+    {"id": "bl-venue",       "category": "Venue",       "amount": 250000, "floor": 250000, "priority": 9, "funded_by": null, "cuttable": 0, "public": 0, "owner": "p-ops"},
+    {"id": "bl-food",        "category": "Food",        "amount": 300000, "floor": 225000, "priority": 4, "funded_by": null, "cuttable": 1, "public": 0, "owner": "p-ops"},
+    {"id": "bl-marketing",   "category": "Marketing",   "amount": 150000, "floor": 75000,  "priority": 2, "funded_by": null, "cuttable": 1, "public": 0, "owner": "p-marketing"},
+    {"id": "bl-swag",        "category": "Swag",        "amount": 100000, "floor": 25000,  "priority": 1, "funded_by": null, "cuttable": 1, "public": 0, "owner": "p-marketing"},
+    {"id": "bl-ops",         "category": "Ops/Tech",    "amount": 100000, "floor": 100000, "priority": 9, "funded_by": null, "cuttable": 0, "public": 0, "owner": "p-ops"},
+    {"id": "bl-contingency", "category": "Contingency", "amount": 100000, "floor": 50000,  "priority": 5, "funded_by": null, "cuttable": 1, "public": 0, "owner": "p-treasurer"}
+  ],
+  "deliverables": [
+    {"id": "d-banner",     "sponsor_id": "s-technova",   "kind": "banner_logo",  "spec": "L",      "deadline": "2026-11-15", "status": "active", "owner": "p-design"},
+    {"id": "d-keynote",    "sponsor_id": "s-technova",   "kind": "keynote",      "spec": "20 min", "deadline": "2026-11-20", "status": "active", "owner": "p-programme"},
+    {"id": "d-posts",      "sponsor_id": "s-technova",   "kind": "social_posts", "spec": "3",      "deadline": "2026-11-18", "status": "active", "owner": "p-marketing"},
+    {"id": "d-bb-banner",  "sponsor_id": "s-brightbank", "kind": "banner_logo",  "spec": "M",      "deadline": "2026-11-15", "status": "active", "owner": "p-design"},
+    {"id": "d-bb-posts",   "sponsor_id": "s-brightbank", "kind": "social_posts", "spec": "2",      "deadline": "2026-11-18", "status": "active", "owner": "p-marketing"},
+    {"id": "d-ck-banner",  "sponsor_id": "s-codekart",   "kind": "banner_logo",  "spec": "M",      "deadline": "2026-11-15", "status": "active", "owner": "p-design"},
+    {"id": "d-ck-posts",   "sponsor_id": "s-codekart",   "kind": "social_posts", "spec": "2",      "deadline": "2026-11-18", "status": "active", "owner": "p-marketing"}
+  ],
+  "calendar_events": [
+    {"id": "ev-banner-print", "title": "Main banner print run",  "date": "2026-11-15", "owner": "p-design",      "linked_entity": "d-banner",   "status": "active"},
+    {"id": "ev-keynote",      "title": "TechNova keynote slot",  "date": "2026-11-20", "owner": "p-programme",   "linked_entity": "d-keynote",  "status": "active"},
+    {"id": "ev-payment",      "title": "TechNova payment due",   "date": "2026-11-25", "owner": "p-treasurer",   "linked_entity": "s-technova", "status": "active"},
+    {"id": "ev-sync",         "title": "Sponsor sync call",      "date": "2026-11-16", "owner": "p-sponsorship", "linked_entity": "s-technova", "status": "active"},
+    {"id": "ev-tasting",      "title": "Food tasting",           "date": "2026-11-17", "owner": "p-ops",         "linked_entity": null,         "status": "active"}
+  ],
+  "org_approvals": [
+    {"id": "oa-prizes", "subject": "Prize pool ₹3,00,000",     "approver": "p-faculty", "amount": 300000, "status": "pending",  "linked_line": "bl-prizes"},
+    {"id": "oa-venue",  "subject": "Venue booking ₹2,50,000",  "approver": "p-faculty", "amount": 250000, "status": "approved", "linked_line": "bl-venue"}
+  ],
+  "promo_assets": [
+    {"id": "p-poster", "kind": "poster", "text": "Gold Partner: TechNova | Silver Partners: BrightBank, CodeKart", "published": 1, "sponsor_ids": ["s-technova", "s-brightbank", "s-codekart"]},
+    {"id": "p-reel",   "kind": "social", "text": "Thank you Zestly for the snacks!", "published": 0, "sponsor_ids": ["s-zestly"]}
+  ],
+  "docs": [
+    {"id": "doc-technova-mou", "title": "TechNova sponsorship agreement (MoU)", "sponsor_id": "s-technova", "body": "Gold tier, ₹5,00,000. Benefits: main-banner logo (L), 20-minute keynote, 3 social posts."},
+    {"id": "doc-social",       "title": "Social media calendar",                "sponsor_id": null,         "body": "Nov 18: sponsor spotlight posts."}
+  ],
+  "people": [
+    {"id": "p-design",      "name": "Ananya", "role": "Design lead",      "email": "design@innovision.in"},
+    {"id": "p-programme",   "name": "Kabir",  "role": "Programme lead",   "email": "programme@innovision.in"},
+    {"id": "p-treasurer",   "name": "Meera",  "role": "Treasurer",        "email": "treasurer@innovision.in"},
+    {"id": "p-faculty",     "name": "Dr. Rao","role": "Faculty advisor",  "email": "advisor@innovision.in"},
+    {"id": "p-sponsorship", "name": "Priya",  "role": "Sponsorship lead", "email": "sponsorship@innovision.in"},
+    {"id": "p-marketing",   "name": "Arjun",  "role": "Marketing lead",   "email": "marketing@innovision.in"},
+    {"id": "p-ops",         "name": "Dev",    "role": "Ops lead",         "email": "ops@innovision.in"}
+  ],
+  "entity_aliases": [
+    {"alias": "technova",                "entity_id": "s-technova",   "kind": "name",   "role": null},
+    {"alias": "technova pvt ltd",        "entity_id": "s-technova",   "kind": "name",   "role": null},
+    {"alias": "tn",                      "entity_id": "s-technova",   "kind": "name",   "role": null},
+    {"alias": "technova.io",             "entity_id": "s-technova",   "kind": "domain", "role": null},
+    {"alias": "rohan.mehta@technova.io", "entity_id": "s-technova",   "kind": "person", "role": "CFO"},
+    {"alias": "brightbank",              "entity_id": "s-brightbank", "kind": "name",   "role": null},
+    {"alias": "bright bank",             "entity_id": "s-brightbank", "kind": "name",   "role": null},
+    {"alias": "brightbank.com",          "entity_id": "s-brightbank", "kind": "domain", "role": null},
+    {"alias": "events@brightbank.com",   "entity_id": "s-brightbank", "kind": "person", "role": "POC"},
+    {"alias": "codekart",                "entity_id": "s-codekart",   "kind": "name",   "role": null},
+    {"alias": "codekart.in",             "entity_id": "s-codekart",   "kind": "domain", "role": null},
+    {"alias": "zestly",                  "entity_id": "s-zestly",     "kind": "name",   "role": null},
+    {"alias": "zestly.co",               "entity_id": "s-zestly",     "kind": "domain", "role": null}
+  ],
+  "facts": [
+    {"id": "f-1", "entity": "s-technova",   "predicate": "committed_amount", "value": "500000", "valid_from": "2026-10-03T11:00:00", "source_ref": "e-07", "confidence": 0.95},
+    {"id": "f-2", "entity": "s-technova",   "predicate": "tier",             "value": "Gold",   "valid_from": "2026-10-03T11:00:00", "source_ref": "e-07", "confidence": 0.95},
+    {"id": "f-3", "entity": "s-brightbank", "predicate": "committed_amount", "value": "250000", "valid_from": "2026-10-01T10:00:00", "source_ref": "e-03", "confidence": 0.95}
+  ]
+}
