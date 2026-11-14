@@ -6,6 +6,7 @@ import { useRun } from '@/store/runStore'
 import type { FaultMode, ScenarioId } from '@/lib/types'
 import { Button, ThemeToggle, Wordmark } from '../ui'
 import { useRunStatus } from './status'
+import { WatchButtons } from '../watch/WatchPanels'
 
 /** A button that opens a small panel; closes on outside click or Escape. */
 function Popover({ label, variant = 'quiet', children, align = 'right' }: { label: ReactNode; variant?: 'primary' | 'quiet'; children: (close: () => void) => ReactNode; align?: 'left' | 'right' }) {
@@ -53,7 +54,7 @@ function ScenarioMenu() {
         <div>
           <p className="px-3 pb-1 pt-1.5 text-[12px] text-muted">Each scenario resets the workspace and plays one message through the agents.</p>
           {(Object.keys(profile.scenarios) as ScenarioId[]).map((id) => (
-            <MenuItem key={id} title={`${id}: ${profile.scenarios[id].name}${scenario === id ? ' (last run)' : ''}`} hint={profile.scenarios[id].hint}
+            <MenuItem key={id} title={`${id}: ${profile.scenarios[id]!.name}${scenario === id ? ' (last run)' : ''}`} hint={profile.scenarios[id]!.hint}
               onClick={() => { close(); useRun.getState().start(id) }} />
           ))}
         </div>
@@ -126,6 +127,7 @@ export function SimpleHeader() {
           <span className="truncate font-semibold">{status.text}</span>
         </p>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <WatchButtons />
           <ScenarioMenu />
           <DemoMenu />
         </div>

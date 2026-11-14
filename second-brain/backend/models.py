@@ -24,6 +24,34 @@ class ExtractedChange(BaseModel):
     source: Literal["llm", "cache", "cache-fallback", "rules"] = "rules"
 
 
+class TrustSignal(BaseModel):
+    """One observable reason a score moved, e.g. ('lookalike_domain', -0.45, 'techn0va-billing.com
+    imitates technova.io')."""
+    signal: str
+    delta: float
+    detail: str
+
+
+class TrustReport(BaseModel):
+    """Two separate questions about one message, scored from visible signals:
+    trust     = is the sender who they claim to be?
+    certainty = is the change itself clear and final?
+    The gate (overall) is the weaker of the two: a precise email from an impostor and a genuine
+    but hedged email both stop for a person."""
+    message_id: str
+    sender: str
+    sponsor_id: str | None = None
+    trust: float
+    trust_signals: list[TrustSignal]
+    certainty: float | None = None
+    certainty_signals: list[str] = []
+    overall: float
+    band: Literal["autonomous", "supervised", "clarify"]
+    route: str
+    known_contact: str | None = None
+    claimed_amount: int | None = None
+
+
 class ResolvedChange(BaseModel):
     change_id: str                     # the source message id; idempotency is keyed on it
     sponsor_id: str
@@ -40,6 +68,11 @@ class ResolvedChange(BaseModel):
     contradiction: dict | None = None
     human_confirmed: bool = False
     evidence_refs: list[str] = []
+    # Email Trust Score: confidence (the gate) = min(certainty, trust)
+    certainty: float | None = None
+    trust: float | None = None
+    trust_signals: list[TrustSignal] = []
+    known_contact: str | None = None
 
 
 class ImpactNode(BaseModel):

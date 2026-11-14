@@ -12,7 +12,7 @@ import traceback
 import uuid
 from datetime import datetime
 
-from . import approvals, config, db
+from . import approvals, config, db, negotiation, trust, verifications
 from .agents import communication, execution, knowledge, planning, verification
 from .events import RunCtx, emit
 from .models import RunState
@@ -120,6 +120,10 @@ class Coordinator:
         t = communication.triage(self.msg)
         self.run.triage = t
         c.emit("triage", f"{t.label}: {'; '.join(t.reasons)}", t.model_dump(), [self.msg["id"]])
+        score, signals = trust.sender_trust(self.msg)
+        c.emit("trust.scored", f"Sender trust {score:.2f}: "
+               + ("; ".join(x.detail for x in signals if x.delta) or "no signals"),
+               {"trust": score, "signals": [x.model_dump() for x in signals]}, [self.msg["id"]])
         c.emit("agent.finished", f"Triage: {t.label}", {})
         if t.label == "suspicious":
             self.transition("QUARANTINED")
@@ -147,7 +151,13 @@ class Coordinator:
         try:
             rc = knowledge.resolve_change(self.msg, self.run.extracted)
         except knowledge.Unresolved as u:
-            self.run.clarification = {"question": u.question, "reasons": ["could not resolve"]}
+            item = verifications.open_item(
+                run_id=self.run.id, msg=self.msg, sponsor_id=None, sponsor_name=None,
+                claimed={"new_amount": self.run.extracted.new_amount if self.run.extracted else None},
+                question=u.question, reasons=["could not resolve"], trust_score=None, certainty=None, overall=None,
+                report={}, contact=None)
+            self.run.clarification = {"question": u.question, "reasons": ["could not resolve"],
+                                      "verification_id": item["id"], "recommended": item["recommended"]}
             k.emit("agent.finished", f"Needs clarification: {u.question}", {})
             self.transition("AWAIT_CLARIFICATION")
             return
@@ -155,8 +165,13 @@ class Coordinator:
         k.emit("resolved", f"{rc.sponsor_name} via {rc.resolution_method}; {rc.old_amount} → {rc.new_amount}",
                rc.model_dump(include={"sponsor_id", "resolution_method", "old_amount", "new_amount",
                                       "old_tier", "new_tier", "shortfall"}), rc.evidence_refs)
-        k.emit("confidence", f"{rc.confidence:.2f} → {rc.band}",
-               {"score": rc.confidence, "band": rc.band, "reasons": rc.confidence_reasons}, [rc.change_id])
+        gated = ("trust" if rc.trust is not None and rc.certainty is not None and rc.trust < rc.certainty
+                 else "certainty")
+        k.emit("confidence", f"{rc.confidence:.2f} → {rc.band} (certainty {rc.certainty:.2f}, trust {rc.trust:.2f})",
+               {"score": rc.confidence, "band": rc.band, "reasons": rc.confidence_reasons,
+                "certainty": rc.certainty, "trust": rc.trust, "gated_by": gated,
+                "trust_signals": [x.model_dump() for x in rc.trust_signals],
+                "thresholds": trust.thresholds()}, [rc.change_id])
         if rc.contradiction:
             c = rc.contradiction
             k.emit("memory.contradiction", f"Memory says {c['old_value']} ({c['old_source']}); "
@@ -167,28 +182,54 @@ class Coordinator:
             self.transition("DONE")
             self.finish("no change: workspace already reflects this commitment")
         elif rc.band == "clarify":
-            self.run.clarification = {
-                "question": f"Is {rc.sponsor_name}'s new commitment of ₹{rc.new_amount:,} final?",
-                "reasons": rc.confidence_reasons,
-                "draft": f"Hi, thanks for the update. Could you confirm the final committed amount for "
-                         f"Innovision 2026, and whether board approval is still pending?"}
+            low_trust = rc.trust is not None and rc.trust < config.TRUST_LOW
+            name = rc.sponsor_name.split()[0]
+            if low_trust:
+                question = f"Is this really from {name}? The sender could not be verified."
+                reasons = [x.detail for x in rc.trust_signals if x.delta < 0] or ["sender trust is low"]
+            else:
+                question = f"Is {name}'s new commitment of ₹{rc.new_amount:,} final?"
+                reasons = [r for r in rc.confidence_reasons if not r.startswith("0.50")]
+            item = verifications.open_item(
+                run_id=self.run.id, msg=self.msg, sponsor_id=rc.sponsor_id, sponsor_name=name,
+                claimed={"new_amount": rc.new_amount, "old_amount": rc.old_amount, "new_tier": rc.new_tier},
+                question=question, reasons=reasons, trust_score=rc.trust, certainty=rc.certainty,
+                overall=rc.confidence, report={"trust_signals": [x.model_dump() for x in rc.trust_signals],
+                                               "certainty_reasons": rc.confidence_reasons},
+                contact=rc.known_contact)
+            self.run.clarification = {"question": question, "reasons": reasons,
+                                      "draft": (item["outreach"] or {}).get("body"), "verification_id": item["id"],
+                                      "recommended": item["recommended"], "low_trust": low_trust,
+                                      "contact": rc.known_contact}
             self.transition("AWAIT_CLARIFICATION")
         else:
             self.handoff("Knowledge", "Knowledge", "impact analysis")
             self.transition("ANALYZE")
 
     async def on_await_clarification(self) -> None:
+        vid = self.run.clarification.get("verification_id")
         emit(self.run.id, "Coordinator", "clarification.requested", self.run.clarification["question"],
              self.run.clarification)
+        if vid:
+            emit(self.run.id, "Knowledge", "verification.requested",
+                 f"Added to the verification queue ({vid}): {self.run.clarification['question']}",
+                 {"verification": verifications.get(vid)}, [self.run.message_id])
         save(self.run)
-        sig = await approvals.wait_signal(f"clarify:{self.run.id}", config.APPROVAL_TIMEOUT_S)
+        while True:
+            sig = await approvals.wait_signal(f"clarify:{self.run.id}", config.APPROVAL_TIMEOUT_S)
+            if sig is not None and sig.get("decision") == "ask_sender":
+                save(self.run)          # the contact on file was emailed; keep waiting for their answer
+                continue
+            break
+        verifications.settle(vid, sig)
         if sig is None:
             self.transition("ESCALATED")
             self.finish("escalated: clarification not answered in time")
             return
         if sig.get("decision") != "confirm" or self.run.resolved is None:
+            emit(self.run.id, "Human", "clarification.answered", sig.get("outcome") or "Dismissed", sig)
             self.transition("DONE")
-            self.finish("dismissed by human: no changes made")
+            self.finish(sig.get("outcome") or "dismissed by human: no changes made")
             return
         rc = self.run.resolved
         if sig.get("amount"):
@@ -196,8 +237,12 @@ class Coordinator:
             rc.new_tier = config.tier_for(rc.new_amount)
             rc.shortfall = rc.old_amount - rc.new_amount
         rc.human_confirmed, rc.confidence, rc.band = True, 1.0, "autonomous"
-        rc.confidence_reasons.append("confirmed by a human")
-        emit(self.run.id, "Human", "clarification.answered", f"Confirmed ₹{rc.new_amount:,}", sig)
+        rc.confidence_reasons.append(sig.get("how") or "confirmed by a human")
+        for ref in sig.get("evidence") or []:
+            if ref not in rc.evidence_refs:
+                rc.evidence_refs.append(ref)
+        emit(self.run.id, "Human", "clarification.answered",
+             f"Confirmed ₹{rc.new_amount:,} ({sig.get('how') or 'confirmed by a human'})", sig)
         self.transition("ANALYZE")
 
     async def on_analyze(self) -> None:
@@ -216,6 +261,13 @@ class Coordinator:
     async def on_options(self) -> None:
         p = self.agent("Planning")
         p.emit("agent.started", "Computing shortfall options", {})
+        rc = self.run.resolved
+        neg = negotiation.analyze(rc.sponsor_id, rc.new_amount, rc.old_amount)
+        if neg and neg.get("eligible") and neg.get("dropped"):
+            self.run.meta["negotiation"] = True
+            p.emit("negotiation.available", f"{neg['headline']}: counter-offer drafted ("
+                   + "; ".join(f"{o['title']} +₹{o['add']:,}" for o in neg["offers"] if o["add"]) + ")",
+                   {"negotiation": neg}, [rc.change_id])
         opts = planning.options(self.run.resolved)
         self.run.options = opts
         if opts:

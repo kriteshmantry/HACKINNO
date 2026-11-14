@@ -37,6 +37,7 @@ export const HTTP_PROFILE: BackendProfile = {
     S2: { name: 'Ambiguous', hint: '“Probably around 3L, subject to our board.” Confidence 0.30, so it asks a person and changes nothing' },
     S3: { name: 'Chat relay', hint: 'The sponsorship lead relays “TN: board approved 3.5L final” in chat. “TN” is resolved to TechNova' },
     S4: { name: 'Injection', hint: 'A lookalike-domain email tries to give the system orders. Quarantined at triage' },
+    S5: { name: 'Impostor', hint: 'A precise ₹1L cut from technova-io.com. Trust 0.00: held, and you verify with the real contact on file' },
   },
   caps: { preemption: false, context: true, preferences: false, clarifyQuestion: true },
 }

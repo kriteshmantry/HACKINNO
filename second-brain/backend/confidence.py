@@ -79,7 +79,7 @@ def hedges_in(text: str) -> list[str]:
 
 
 def score(*, new_amount: int, text: str, resolution_method: str, sender_role: str | None,
-          internal_relay: bool, corroborated: bool) -> tuple[float, list[str]]:
+          internal_relay: bool, corroborated: bool, old_amount: int | None = None) -> tuple[float, list[str]]:
     s, why = 0.5, ["0.50 base"]
     if sender_role in ("CFO", "POC") and resolution_method in ("person", "domain", "alias"):
         s += 0.25
@@ -103,13 +103,16 @@ def score(*, new_amount: int, text: str, resolution_method: str, sender_role: st
     if resolution_method == "fuzzy":
         s -= 0.10
         why.append("-0.10 sponsor matched only fuzzily")
+    if old_amount and abs(old_amount - new_amount) / old_amount > 0.5:
+        s -= 0.10
+        why.append(f"-0.10 unusually large change ({(new_amount - old_amount) / old_amount:+.0%})")
     s = round(max(0.0, min(1.0, s)), 2)
     return s, why
 
 
-def band(conf: float) -> str:
-    if conf >= config.BAND_AUTONOMOUS:
+def band(conf: float, autonomous: float | None = None, supervised: float | None = None) -> str:
+    if conf >= (config.BAND_AUTONOMOUS if autonomous is None else autonomous):
         return "autonomous"
-    if conf >= config.BAND_SUPERVISED:
+    if conf >= (config.BAND_SUPERVISED if supervised is None else supervised):
         return "supervised"
     return "clarify"

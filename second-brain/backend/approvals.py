@@ -123,6 +123,10 @@ async def wait_signal(name: str, timeout: float) -> dict | None:
         _signals.pop(name, None)
 
 
+def is_waiting(name: str) -> bool:
+    return name in _signals
+
+
 def send_signal(name: str, data: dict) -> bool:
     if name not in _signals:
         return False

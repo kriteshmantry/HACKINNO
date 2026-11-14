@@ -56,6 +56,59 @@ Without an API key, extraction falls back to deterministic regex rules. Every sc
 | Inspect | `GET /api/runs/{id}`, `/plan`, `/log`, `/snapshots`, `/trace/{action_id}`, `GET /api/state`, `/api/graph?run_id=`, `/api/outbox`, `/api/memory/facts` |
 | Verifier demo | `POST /api/debug/corrupt` (breaks invariant V3) |
 
+## Email Trust Score, negotiation and risk radar
+
+**Email Trust Score.** Every message gets two scores from visible signals.
+- *Trust* asks whether the sender is genuine. Signals:
+  - the sender is the contact on file, or uses the sponsor's domain;
+  - the domain is a lookalike (`techn0va-billing.com`, `technova-io.com`);
+  - the reply-to address differs from the sender;
+  - it is the sender's first message;
+  - pressure or secrecy wording;
+  - requests for money or credentials;
+  - the sender's track record from past human verdicts.
+- *Certainty* asks whether the change is clear: the existing confidence signals, plus a penalty when the change is unusually large.
+
+The run acts on the weaker of the two. Anything below the approval threshold goes to the verification queue, where a person can:
+- **confirm** the change;
+- **correct** the amount;
+- **reject** it;
+- **ask the sender**, which emails the contact on file, never the reply-to address. The run keeps waiting for the answer.
+
+Every verdict updates the sender's track record.
+
+**Tier-boundary negotiation.** "TechNova is ₹1,00,000 short of staying Gold." When a cut drops a sponsor a tier, the system drafts a counter-offer to the contact on file:
+- top up to the old tier;
+- or buy back the most valuable lost benefit, priced from `ADDON_PRICES`.
+
+The draft includes the budget effect and the next print deadline. If the sponsor accepts, a normal run applies the increase.
+
+**Risk radar.** Rules over the live records and the scenario clock catch trouble with no email needed:
+- payments due with money outstanding;
+- sponsors who have paid nothing while their logo prints tomorrow;
+- unread or unverified changes before a print deadline;
+- entitlement drift;
+- published posters that name the wrong tier;
+- pending sign-offs;
+- budget gaps;
+- tier boundaries.
+
+Each item offers a one-click action: a reminder email, processing a message, or opening the counter-offer.
+
+| Step | Call |
+|---|---|
+| Impostor scenario | `POST /api/scenarios/S5` (e-25 from `technova-io.com`, reply-to Gmail; trust 0.00, held) |
+| Scores for every message | `GET /api/trust/inbox`, `GET /api/messages/{id}/trust` |
+| Thresholds | `GET` / `PUT /api/trust/policy {"autonomous":0.8,"supervised":0.5}` |
+| Verification queue | `GET /api/verifications?status=open`, `POST /api/verifications/{id} {"verdict":"confirm"\|"correct"\|"reject"\|"ask_sender","amount":..., "body":...}` |
+| Demo reply from the contact | `POST /api/debug/verification-reply/{id} {"genuine":false}` |
+| Track record, calibration | `GET /api/trust/senders`, `GET /api/trust/calibration` |
+| Counter-offer | `GET /api/negotiation/{sponsor_id}`, `GET /api/runs/{id}/negotiation`, `POST /api/negotiation/{sponsor_id}/send` |
+| Demo sponsor reply | `POST /api/debug/negotiation-reply/{neg_id} {"choice":"restore"\|"decline"}` (restore starts a run) |
+| Risk radar | `GET /api/radar`, `POST /api/radar/{item_id}/act {"action":0}` |
+
+Messages sent with one click are recorded as approved in `approvals_queue` and go through the normal tool layer, so V8 still holds and a double click cannot send twice.
+
 ## Layout
 
 ```

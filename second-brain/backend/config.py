@@ -29,9 +29,25 @@ TOOL_TIMEOUT_S = float(os.getenv("SB_TOOL_TIMEOUT_S", 5.0))
 BREAKER_THRESHOLD = int(os.getenv("SB_BREAKER_THRESHOLD", 3))
 BREAKER_COOLDOWN_S = float(os.getenv("SB_BREAKER_COOLDOWN_S", 30))
 
-# Confidence bands
+# Confidence bands (defaults; a person can move them at runtime through /api/trust/policy)
 BAND_AUTONOMOUS = 0.80
 BAND_SUPERVISED = 0.50
+# Below this sender trust, the recommended verification is "ask the contact on file"
+TRUST_LOW = 0.50
+# Webmail domains: fine for a volunteer, odd for a sponsor's finance team
+FREE_MAIL = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "proton.me", "protonmail.com", "icloud.com"}
+INTERNAL_DOMAIN = "innovision.in"
+
+# Tier-boundary negotiation: what a sponsor can buy back on top of a lower tier.
+# Workspace policy set by the sponsorship lead; the agent never invents prices.
+ADDON_PRICES = {"keynote": 75_000, "banner_logo": 25_000, "social_posts": 10_000}
+# Only suggest buying back the old tier when the top-up is at most this share of the new amount
+NEGOTIATION_MAX_TOPUP_SHARE = 0.5
+
+# Risk radar look-ahead
+RADAR_HORIZON_DAYS = 14
+RADAR_URGENT_DAYS = 3
+FEST_DATE = os.getenv("SB_FEST_DATE", "2026-11-20")
 
 # Policy
 APPROVAL_RISK_THRESHOLD = 3

@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from . import approvals, context, coordinator, db, events
+from . import approvals, context, coordinator, db, events, negotiation, radar, trust, verifications
+from .agents import communication
 from .knowledge import graph as kg
 from .knowledge import memory
 from .tools import breaker, registry, set_fault
@@ -20,6 +21,7 @@ SCENARIOS = {
     "S2": {"message_id": "e-21", "title": "Ambiguous: 'around 3L, subject to board approval'"},
     "S3": {"message_id": "c-11", "title": "Chat relay: 'board approved 3.5L final'"},
     "S4": {"message_id": "e-23", "title": "Prompt injection from a look-alike domain"},
+    "S5": {"message_id": "e-25", "title": "Impostor: look-alike domain asks to cut TechNova to ₹1L"},
 }
 
 
@@ -227,10 +229,195 @@ class Clarify(BaseModel):
 
 @app.post("/api/runs/{run_id}/clarify")
 async def clarify(run_id: str, body: Clarify):
-    _run_or_404(run_id)
+    run = _run_or_404(run_id)
+    vid = (run.clarification or {}).get("verification_id")
+    item = verifications.get(vid) if vid else None
+    if item and item["status"] in verifications.OPEN:
+        try:
+            await verifications.decide(vid, "confirm" if body.decision == "confirm" else "reject", amount=body.amount)
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        return {"ok": True, "verification_id": vid}
     if not approvals.send_signal(f"clarify:{run_id}", body.model_dump()):
         raise HTTPException(409, "run is not waiting for clarification")
     return {"ok": True}
+
+
+# --- Email Trust Score ----------------------------------------------------------------------
+@app.get("/api/trust/inbox")
+async def trust_inbox():
+    """Every message with its trust, certainty and gate score: the inbox badges."""
+    out = []
+    latest = {v["message_id"]: v for v in reversed(verifications.list_items())}
+    for m in db.query("SELECT * FROM messages ORDER BY received_at DESC"):
+        t = communication.triage(m)
+        rep = trust.assess(m, t.label)
+        v = latest.get(m["id"])
+        out.append({**rep.model_dump(), "triage": t.model_dump(), "subject": m["subject"], "channel": m["channel"],
+                    "received_at": m["received_at"], "reply_to": m.get("reply_to"),
+                    "verification": {"id": v["id"], "status": v["status"], "verdict": v["verdict"]} if v else None})
+    return out
+
+
+@app.get("/api/messages/{message_id}/trust")
+async def message_trust(message_id: str):
+    m = db.query_one("SELECT * FROM messages WHERE id=?", (message_id,))
+    if m is None:
+        raise HTTPException(404, f"message {message_id} not found")
+    return trust.assess(m, communication.triage(m).label).model_dump()
+
+
+@app.get("/api/trust/senders")
+async def trust_senders():
+    return trust.all_reputations()
+
+
+@app.get("/api/trust/calibration")
+async def trust_calibration():
+    return trust.calibration()
+
+
+class Policy(BaseModel):
+    autonomous: float
+    supervised: float
+
+
+@app.get("/api/trust/policy")
+async def get_policy():
+    return {**trust.thresholds(), "trust_low": trust.config.TRUST_LOW}
+
+
+@app.put("/api/trust/policy")
+async def put_policy(body: Policy):
+    try:
+        th = trust.set_thresholds(body.autonomous, body.supervised)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    events.emit(None, "System", "trust.policy", f"Thresholds set: act alone at {th['autonomous']:.2f}, "
+                f"with approvals at {th['supervised']:.2f}", th)
+    return th
+
+
+@app.get("/api/verifications")
+async def list_verifications(status: str | None = None, run_id: str | None = None):
+    return verifications.list_items(status, run_id)
+
+
+@app.get("/api/verifications/{ver_id}")
+async def get_verification(ver_id: str):
+    v = verifications.get(ver_id)
+    if v is None:
+        raise HTTPException(404, f"verification {ver_id} not found")
+    return v
+
+
+class Verdict(BaseModel):
+    verdict: str                     # confirm | correct | reject | ask_sender
+    amount: int | None = None
+    reason: str | None = None
+    body: str | None = None          # edited outreach email (ask_sender)
+
+
+@app.post("/api/verifications/{ver_id}")
+async def decide_verification(ver_id: str, body: Verdict):
+    try:
+        return await verifications.decide(ver_id, body.verdict, amount=body.amount, reason=body.reason, body=body.body)
+    except KeyError:
+        raise HTTPException(404, f"verification {ver_id} not found")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+class SenderReply(BaseModel):
+    genuine: bool
+    amount: int | None = None
+
+
+@app.post("/api/debug/verification-reply/{ver_id}")
+async def verification_reply(ver_id: str, body: SenderReply):
+    """Demo: the contact on file answers the verification email (genuine or 'we never sent that')."""
+    try:
+        return verifications.sender_reply(ver_id, body.genuine, body.amount)
+    except KeyError:
+        raise HTTPException(404, f"verification {ver_id} not found")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+# --- Tier-boundary negotiation ----------------------------------------------------------------
+@app.get("/api/negotiation/{sponsor_id}")
+async def get_negotiation(sponsor_id: str, new_amount: int | None = None):
+    a = negotiation.analyze(sponsor_id, new_amount)
+    if a is None:
+        raise HTTPException(404, f"sponsor {sponsor_id} not found")
+    return {**a, "record": negotiation.latest(sponsor_id)}
+
+
+@app.get("/api/runs/{run_id}/negotiation")
+async def run_negotiation(run_id: str):
+    run = _run_or_404(run_id)
+    if not run.resolved:
+        return None
+    rc = run.resolved
+    # Only a change that is being applied counts; an unverified or dismissed claim is never negotiated.
+    applying = run.state in ("ANALYZE", "OPTIONS", "PLAN", "VALIDATE", "EXECUTE", "VERIFY", "REPLAN")
+    a = negotiation.analyze(rc.sponsor_id, rc.new_amount if applying else None, rc.old_amount if applying else None)
+    return {**a, "record": negotiation.latest(rc.sponsor_id)} if a else None
+
+
+class SendOffer(BaseModel):
+    subject: str | None = None
+    body: str | None = None
+    run_id: str | None = None
+
+
+@app.post("/api/negotiation/{sponsor_id}/send")
+async def send_offer(sponsor_id: str, body: SendOffer):
+    try:
+        return await negotiation.send(sponsor_id, subject=body.subject, body=body.body, run_id=body.run_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+class OfferReply(BaseModel):
+    choice: str                      # restore | decline
+
+
+@app.post("/api/debug/negotiation-reply/{neg_id}")
+async def negotiation_reply(neg_id: str, body: OfferReply):
+    """Demo: the sponsor answers the counter-offer. Accepting starts a normal run on their reply."""
+    try:
+        n, reply = negotiation.sponsor_reply(neg_id, body.choice)
+    except KeyError:
+        raise HTTPException(404, f"negotiation {neg_id} not found")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    run_id = None
+    if body.choice == "restore":
+        run_id = coordinator.start(reply["id"], 900).id
+        negotiation.set_reply_run(neg_id, run_id)
+    return {"negotiation": n, "reply": reply, "run_id": run_id}
+
+
+# --- Risk radar -------------------------------------------------------------------------------
+@app.get("/api/radar")
+async def get_radar():
+    return radar.scan()
+
+
+class RadarAct(BaseModel):
+    action: int = 0
+    body: str | None = None
+
+
+@app.post("/api/radar/{item_id:path}/act")
+async def radar_act(item_id: str, body: RadarAct):
+    try:
+        return await radar.act(item_id, body.action, body.body)
+    except KeyError:
+        raise HTTPException(404, f"radar item {item_id} not found")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
 
 
 # --- debug / demo controls -------------------------------------------------------------

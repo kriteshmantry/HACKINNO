@@ -12,7 +12,7 @@ export type RunStateName =
   | 'PLAN' | 'VALIDATE' | 'EXECUTE' | 'AWAIT_APPROVAL' | 'VERIFY' | 'REPLAN' | 'PREEMPTED' | 'DONE'
   | 'ESCALATE' | 'IGNORED' | 'QUARANTINED'
 
-export type ScenarioId = 'S1' | 'S2' | 'S3' | 'S4'
+export type ScenarioId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5'
 export type Band = 'autonomous' | 'supervised' | 'clarify'
 export type Severity = 'high' | 'medium' | 'low'
 export type FaultMode = 'off' | 'once' | 'always' | 'slow'
@@ -83,7 +83,12 @@ export interface ImpactNode {
 
 /* ---------- reasoning artefacts ---------- */
 export interface ConfidenceReason { delta: number; label: string }
-export interface Confidence { score: number; band: Band; reasons: ConfidenceReason[]; llm_self_reported?: number }
+export interface TrustSignal { signal: string; delta: number; detail: string }
+export interface Confidence {
+  score: number; band: Band; reasons: ConfidenceReason[]; llm_self_reported?: number
+  /** Email Trust Score: the gate (score) is the weaker of the two */
+  certainty?: number; trust?: number; gated_by?: 'trust' | 'certainty'; trust_signals?: TrustSignal[]
+}
 
 export interface ExtractedChange {
   change_id: string
@@ -217,6 +222,7 @@ export type EventType =
   | 'preempted' | 'verify.check' | 'verify.summary'
   | 'run.done' | 'run.escalated' | 'run.waiting' | 'run.quarantined' | 'episode'
   | 'clarification.requested' | 'clarification.answered' | 'log'
+  | 'trust.scored' | 'negotiation.available' | 'verification.outreach' | 'outreach.sent'
 
 export interface RunEvent<P = any> {
   id: number
@@ -230,4 +236,8 @@ export interface RunEvent<P = any> {
 }
 
 /** A question the backend asks a person before it will act (low-confidence change). */
-export interface Clarification { question: string; reasons: string[]; draft?: string; amount?: number }
+export interface Clarification {
+  question: string; reasons: string[]; draft?: string; amount?: number
+  /** set when the backend opened an item in the verification queue */
+  verification_id?: string; recommended?: 'ask_sender' | 'confirm_or_correct'; low_trust?: boolean; contact?: string
+}

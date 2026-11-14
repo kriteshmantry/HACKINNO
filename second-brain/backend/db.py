@@ -33,7 +33,17 @@ CREATE TABLE entity_aliases (alias TEXT PRIMARY KEY, entity_id TEXT, kind TEXT, 
 CREATE TABLE facts (id TEXT PRIMARY KEY, entity TEXT, predicate TEXT, value TEXT, valid_from TEXT,
   valid_to TEXT, superseded_by TEXT, source_ref TEXT, confidence REAL);
 CREATE TABLE messages (id TEXT PRIMARY KEY, channel TEXT, sender TEXT, sender_name TEXT, subject TEXT,
-  body TEXT, received_at TEXT, processed INTEGER DEFAULT 0, triage TEXT);
+  body TEXT, received_at TEXT, processed INTEGER DEFAULT 0, triage TEXT, reply_to TEXT, in_reply_to TEXT);
+CREATE TABLE verifications (id TEXT PRIMARY KEY, run_id TEXT, message_id TEXT, sender TEXT, sponsor_id TEXT,
+  status TEXT, trust REAL, certainty REAL, overall REAL, report TEXT, claimed TEXT, question TEXT,
+  recommended TEXT, outreach TEXT, verdict TEXT, verdict_args TEXT, reply_message_id TEXT, decided_by TEXT,
+  created_at TEXT, decided_at TEXT);
+CREATE TABLE sender_reputation (sender TEXT PRIMARY KEY, confirmed INTEGER DEFAULT 0, corrected INTEGER DEFAULT 0,
+  rejected INTEGER DEFAULT 0, updated_at TEXT);
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE negotiations (id TEXT PRIMARY KEY, sponsor_id TEXT, run_id TEXT, status TEXT, analysis TEXT,
+  draft TEXT, outbox_id INTEGER, reply_message_id TEXT, reply_run_id TEXT, outcome TEXT, created_at TEXT,
+  decided_at TEXT);
 CREATE TABLE gaps (sponsor_id TEXT PRIMARY KEY, amount INTEGER, note TEXT, source_ref TEXT);
 CREATE TABLE pending_updates (line_id TEXT PRIMARY KEY, intended_amount INTEGER, current_amount INTEGER,
   note TEXT, status TEXT);
@@ -55,7 +65,8 @@ CREATE INDEX idx_events_run ON events(run_id, id);
 
 TABLES = [line.split()[2] for line in SCHEMA.splitlines() if line.startswith("CREATE TABLE")]
 JSON_COLS = {"notes", "flags", "sponsor_ids", "original_args", "final_args", "preview",
-             "risk_reasons", "evidence_refs", "payload_json", "triage", "cc"}
+             "risk_reasons", "evidence_refs", "payload_json", "triage", "cc", "report", "claimed",
+             "outreach", "verdict_args", "analysis", "draft"}
 
 
 def connect() -> sqlite3.Connection:

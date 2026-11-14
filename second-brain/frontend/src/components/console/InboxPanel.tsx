@@ -4,6 +4,8 @@ import { useRun } from '@/store/runStore'
 import type { InboxMessage } from '@/lib/types'
 import { shortDate } from '@/lib/format'
 import { Chip, Panel } from '../ui'
+import { useWatch } from '@/store/watchStore'
+import { SignalList, TrustBadge, signalItems } from '../watch/TrustParts'
 
 function Highlighted({ text, span }: { text: string; span?: string }) {
   if (!span) return <>{text}</>
@@ -22,6 +24,7 @@ function Row({ m, open, onToggle }: { m: InboxMessage; open: boolean; onToggle: 
   const quarantined = triage?.verdict === 'suspicious'
   const span = extraction?.message_id === m.id ? extraction.span : undefined
   const [flashKey, setFlashKey] = useState(0)
+  const trustRow = useWatch((s) => s.trust[m.id])
 
   useEffect(() => {
     if (focus?.id === m.id) {
@@ -48,12 +51,20 @@ function Row({ m, open, onToggle }: { m: InboxMessage; open: boolean; onToggle: 
         <p className={clsx('mt-0.5 text-[12.5px] text-muted', !open && 'line-clamp-2', span && 'text-text')}>
           <Highlighted text={m.body} span={span} />
         </p>
-        {(isTrigger || triage) && (
+        {(isTrigger || triage || trustRow) && (
           <div className="mt-1.5 flex flex-wrap gap-1">
+            <TrustBadge row={trustRow} />
             {isTrigger && !quarantined && <Chip tone="work">Trigger</Chip>}
             {triage && <Chip tone={triage.verdict === 'suspicious' ? 'fail' : triage.verdict === 'relevant' ? 'ok' : 'muted'}>
               {triage.verdict === 'suspicious' ? 'Quarantined' : triage.verdict === 'relevant' ? 'Relevant' : 'Noise'}
             </Chip>}
+          </div>
+        )}
+        {open && trustRow && trustRow.triage.label !== 'noise' && (
+          <div className="mt-2 text-[11.5px]">
+            <div className="font-semibold text-muted">Sender trust {trustRow.trust.toFixed(2)}{trustRow.reply_to ? `, replies go to ${trustRow.reply_to}` : ''}</div>
+            <div className="mt-0.5"><SignalList items={signalItems(trustRow.trust_signals)} /></div>
+            <div className="mt-1 text-muted">{trustRow.route}</div>
           </div>
         )}
         {open && triage && (
