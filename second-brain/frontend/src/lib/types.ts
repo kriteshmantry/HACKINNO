@@ -96,7 +96,7 @@ export interface ExtractedChange {
   source: 'llm' | 'cache' | 'regex'
   regex_amount?: number
 }
-export interface Resolution { mention: string; entity_id: string | null; entity_name?: string; method: 'alias' | 'domain' | 'fuzzy' | 'unresolved'; score: number; note?: string }
+export interface Resolution { mention: string; entity_id: string | null; entity_name?: string; method: 'alias' | 'domain' | 'person' | 'fuzzy' | 'unresolved'; score: number; note?: string }
 
 export interface Fact {
   id: string

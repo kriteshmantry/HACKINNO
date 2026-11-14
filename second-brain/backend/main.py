@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from . import approvals, coordinator, db, events
+from . import approvals, context, coordinator, db, events
 from .knowledge import graph as kg
 from .knowledge import memory
 from .tools import breaker, registry, set_fault
@@ -141,6 +141,18 @@ async def trace(run_id: str, action_id: str):
         "tool_events": tool_events,
         "verification": run.verification.model_dump() if run.verification else None,
     }
+
+
+@app.get("/api/runs/{run_id}/context/{agent}")
+async def run_context(run_id: str, agent: str):
+    """What one agent was given for this run (context packet); null before it has run."""
+    return context.packet(_run_or_404(run_id), agent)
+
+
+@app.get("/api/memory")
+async def memory_overview():
+    """Long-term memory beyond facts: one summary per finished run."""
+    return context.memory_overview()
 
 
 @app.get("/api/state")

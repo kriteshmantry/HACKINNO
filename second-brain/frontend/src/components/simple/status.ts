@@ -1,16 +1,16 @@
 import { useMemo } from 'react'
 import { useRun } from '@/store/runStore'
-import type { RunStateName } from '@/lib/types'
+import type { AgentId, RunStateName } from '@/lib/types'
 
 export type StageId = 'read' | 'impact' | 'decide' | 'change' | 'check'
 export type StageStatus = 'upcoming' | 'active' | 'needs' | 'done' | 'skipped' | 'stopped'
 
-export const STAGES: { id: StageId; title: string; idle: string }[] = [
-  { id: 'read', title: 'Read the message', idle: 'An agent reads the new email or chat, checks it is safe, and works out what changed and how sure it can be.' },
-  { id: 'impact', title: 'Find what it affects', idle: 'The knowledge graph is followed from the sponsor to every budget line, deliverable, date, approval and person the change touches.' },
-  { id: 'decide', title: 'Choose how to cover the gap', idle: 'If money is now missing, three ways to cover it are computed in code. You pick one.' },
-  { id: 'change', title: 'Make the changes', idle: 'Each change is applied exactly once, with retries. Anything risky waits for your OK.' },
-  { id: 'check', title: 'Check the result', idle: 'Ten checks re-read the live records to confirm everything is consistent before the run finishes.' },
+export const STAGES: { id: StageId; title: string; idle: string; agents: AgentId[] }[] = [
+  { id: 'read', title: 'Read the message', idle: 'An agent reads the new email or chat, checks it is safe, and works out what changed and how sure it can be.', agents: ['Communication', 'Knowledge'] },
+  { id: 'impact', title: 'Find what it affects', idle: 'The knowledge graph is followed from the sponsor to every budget line, deliverable, date, approval and person the change touches.', agents: ['Knowledge'] },
+  { id: 'decide', title: 'Choose how to cover the gap', idle: 'If money is now missing, three ways to cover it are computed in code. You pick one.', agents: ['Planning'] },
+  { id: 'change', title: 'Make the changes', idle: 'Each change is applied exactly once, with retries. Anything risky waits for your OK.', agents: ['Execution'] },
+  { id: 'check', title: 'Check the result', idle: 'Ten checks re-read the live records to confirm everything is consistent before the run finishes.', agents: ['Verification'] },
 ]
 
 const STAGE_OF: Partial<Record<RunStateName, number>> = {

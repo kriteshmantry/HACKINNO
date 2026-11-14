@@ -38,7 +38,7 @@ export const HTTP_PROFILE: BackendProfile = {
     S3: { name: 'Chat relay', hint: 'The sponsorship lead relays “TN: board approved 3.5L final” in chat. “TN” is resolved to TechNova' },
     S4: { name: 'Injection', hint: 'A lookalike-domain email tries to give the system orders. Quarantined at triage' },
   },
-  caps: { preemption: false, context: false, preferences: false, clarifyQuestion: true },
+  caps: { preemption: false, context: true, preferences: false, clarifyQuestion: true },
 }
 
 /** The FastAPI backend in second-brain/backend, spoken to through the adapter. */
@@ -80,7 +80,7 @@ export class HttpBackend implements Backend {
   }
   async getGraph(): Promise<GraphData> { this.graph = undefined; return structuredClone(await this.ensureGraph()) }
   async getFacts(entity: string): Promise<Fact[]> { return mapFacts(await req<any[]>('GET', `/memory/facts?entity=${encodeURIComponent(entity)}`)) }
-  async getMemory(): Promise<{ preferences: Preference[]; episodes: Episode[] }> { return { preferences: [], episodes: [] } }
+  async getMemory(): Promise<{ preferences: Preference[]; episodes: Episode[] }> { return req('GET', '/memory') }
   async forgetPreferences() { /* not part of this backend yet */ }
 
   async startScenario(s: ScenarioId) {
@@ -147,7 +147,9 @@ export class HttpBackend implements Backend {
     const planned = this.translators.get(runId)?.planList.flatMap((p) => p.actions).find((a) => a.id === actionId)
     return mapTrace(raw, planned, label)
   }
-  async getContext(_runId: string, _agent: AgentId): Promise<ContextPacket | null> { return null }
+  async getContext(runId: string, agent: AgentId): Promise<ContextPacket | null> {
+    return req<ContextPacket | null>('GET', `/runs/${encodeURIComponent(runId)}/context/${agent}`)
+  }
   async exportLog(runId: string) { return req<RunEvent[]>('GET', `/runs/${runId}/log`) }
   async getBaseline(runId: string): Promise<WorldState | null> {
     const snaps = await req<any>('GET', `/runs/${runId}/snapshots`)

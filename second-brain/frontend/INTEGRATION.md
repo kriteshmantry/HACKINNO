@@ -30,12 +30,14 @@ The UI talks to a backend through one interface, `src/backend/Backend.ts`:
 | `clarification.requested` | the "Needs a person" card; answers go to `POST /api/runs/{id}/clarify` |
 | `run.completed {state,outcome}` | `run.done`, `run.waiting`, `run.quarantined` or `run.escalated` |
 | `GET /api/runs/{id}/trace/{action}` | the "Why?" drawer's evidence chain |
+| `GET /api/runs/{id}/context/{agent}` | "What the agent was given": the context packet for Communication, Knowledge or Planning |
+| `GET /api/memory` | past runs (episodes) in the Memory view; facts come from `/api/memory/facts` |
 
 IDs: the backend uses `s-technova`, `bl-*`, `d-*`, `ev-*`, `oa-*`. Graph nodes carry a `ref` to the world row they show, so the UI never hard-codes ids. Each backend's `profile` declares its names, the sponsor the scenarios are about, the fault tool (`budget.set_lines`) and which optional features exist.
 
 ## Features the backend does not have yet
 
-The UI hides these when `profile.caps` says so: mid-run preemption (a new message starts a new run that plans only the difference), per-agent context packets, and learned preferences. The simulator still demonstrates all three.
+The UI hides these when `profile.caps` says so: mid-run preemption (a new message starts a new run that plans only the difference) and learned preferences. The simulator still demonstrates all three.
 
 ## The UI's own event contract
 

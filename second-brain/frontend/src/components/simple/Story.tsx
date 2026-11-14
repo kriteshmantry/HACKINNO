@@ -4,7 +4,8 @@ import { backend } from '@/backend'
 import { useRun } from '@/store/runStore'
 import type { Approval, PlannedAction, ScenarioId, WorldState } from '@/lib/types'
 import { lakhs, rupees } from '@/lib/format'
-import { Button, Mono, Spinner, severityColor, statusLabel, statusTone } from '../ui'
+import type { AgentId, NodeKind } from '@/lib/types'
+import { Button, kindLabel, Mono, Spinner, severityColor, statusLabel, statusTone } from '../ui'
 import { STAGES, useStages, type StageId, type StageStatus } from './status'
 
 /* ------------------------------------------------------------------ */
@@ -19,7 +20,7 @@ const TAG: Record<StageStatus, { text: string; cls: string } | null> = {
   stopped: { text: 'Stopped', cls: 'bg-fail-soft text-fail' },
 }
 
-function Stage({ n, id, title, idle, status, summary, children }: { n: number; id: StageId; title: string; idle: string; status: StageStatus; summary?: ReactNode; children: ReactNode }) {
+function Stage({ n, id, title, idle, status, summary, agents, children }: { n: number; id: StageId; title: string; idle: string; status: StageStatus; summary?: ReactNode; agents: AgentId[]; children: ReactNode }) {
   const [override, setOverride] = useState<boolean>()
   // the result stays open once the run finishes: it is the answer people came for
   const auto = status === 'active' || status === 'needs' || status === 'stopped' || (id === 'check' && status === 'done')
@@ -41,13 +42,34 @@ function Stage({ n, id, title, idle, status, summary, children }: { n: number; i
           <span className="flex flex-wrap items-center gap-2">
             <span className={clsx('text-[15px] font-bold tracking-[-0.01em]', (status === 'upcoming' || status === 'skipped') && 'text-muted')}>{title}</span>
             {tag && <span className={clsx('rounded-xs px-1.5 text-[11.5px] font-bold leading-5', tag.cls)}>{tag.text}</span>}
+            <span className="text-[12px] text-faint">by the {agents.join(' and ')} agent{agents.length > 1 ? 's' : ''}</span>
           </span>
           <span className="mt-0.5 block text-[13px] text-muted">{status === 'upcoming' ? idle : status === 'skipped' ? 'Not needed for this message.' : summary}</span>
         </span>
         {canOpen && <span className="mt-1 shrink-0 text-[12px] font-semibold text-work">{open ? 'Hide' : 'Details'}</span>}
       </button>
-      {open && canOpen && <div className="border-t border-line-soft px-4 py-4">{children}</div>}
+      {open && canOpen && (
+        <div className="border-t border-line-soft px-4 py-4">
+          {children}
+          <ContextLinks agents={agents} />
+        </div>
+      )}
     </li>
+  )
+}
+
+/** Context engineering, made visible: the curated slice each agent was given. */
+function ContextLinks({ agents }: { agents: AgentId[] }) {
+  const runId = useRun((s) => s.runId)
+  const withContext = agents.filter((a) => ['Communication', 'Knowledge', 'Planning'].includes(a))
+  if (!runId || !backend.profile.caps.context || !withContext.length) return null
+  return (
+    <p className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-line-soft pt-3 text-[12.5px] text-muted">
+      <span>Context engineering:</span>
+      {withContext.map((a) => (
+        <button key={a} onClick={() => useRun.getState().set('contextAgent', a)} className="font-semibold text-work hover:underline">What the {a} agent was given</button>
+      ))}
+    </p>
   )
 }
 
@@ -131,6 +153,12 @@ const BAND_TEXT = {
   clarify: 'Not sure enough to change anything. A person has to confirm first.',
 }
 
+/** The mention as it appears in the message, not as the alias table stores it. */
+function asWritten(body: string, mention: string) {
+  const i = mention ? body.toLowerCase().indexOf(mention.toLowerCase()) : -1
+  return i >= 0 ? body.slice(i, i + mention.length) : mention
+}
+
 function ReadStage() {
   const inbox = useRun((s) => s.inbox)
   const trigger = useRun((s) => s.trigger)
@@ -138,6 +166,7 @@ function ReadStage() {
   const triageAll = useRun((s) => s.triage)
   const confidence = useRun((s) => s.confidence)
   const contradiction = useRun((s) => s.contradiction)
+  const resolution = useRun((s) => s.resolution)
   const outcome = useRun((s) => s.outcome)
   const approvals = useRun((s) => s.approvals)
   const state = useRun((s) => s.state)
@@ -167,6 +196,16 @@ function ReadStage() {
         {triage && (
           <Fact label="Safe to act on?" tone={quarantined ? 'fail' : undefined}>
             {quarantined ? <>No. It was quarantined before any agent planned anything: {triage.reasons.join('; ').toLowerCase()}.</> : <>Yes: {triage.reasons.join(', ').toLowerCase()}.</>}
+          </Fact>
+        )}
+        {resolution && resolution.entity_id && (
+          <Fact label="Who it is about">
+            <span className="font-semibold">{resolution.entity_name ?? resolution.entity_id}</span>, matched by {
+              resolution.method === 'person' ? 'the sender’s address, a known sponsor contact'
+                : resolution.method === 'domain' ? 'the sender’s email domain'
+                  : resolution.method === 'alias' ? <>the name used in the message (“{asWritten(msg.body, resolution.mention || extraction?.entity_mention || '')}”)</>
+                    : 'a close spelling match'}.
+            <span className="block text-[12.5px] text-muted">The same sponsor is recognised across the tracker, email, chat and documents, whatever it is called there.</span>
           </Fact>
         )}
         {extraction && (
@@ -215,18 +254,46 @@ const GROUPS = [
   { sev: 'low' as const, title: 'People and documents to inform', hint: '' },
 ]
 
+const APP: Partial<Record<NodeKind, string>> = {
+  Sponsor: 'sponsor tracker', Tier: 'sponsor tracker', Budget: 'budget sheet', BudgetLine: 'budget sheet', Deliverable: 'sponsor deliverables',
+  CalendarEvent: 'calendar', OrgApproval: 'approvals', PromoAsset: 'published promotions', Doc: 'documents',
+}
+
 function ImpactStage() {
   const impact = useRun((s) => s.impact)
   const graph = useRun((s) => s.graph)
+  const world = useRun((s) => s.world)
   const [open, setOpen] = useState<string>()
   const label = (id: string) => graph?.nodes.find((n) => n.id === id)?.label ?? id
+  const kindOf = (id: string) => graph?.nodes.find((n) => n.id === id)?.kind
+  const apps = [...new Set(impact.map((x) => APP[kindOf(x.node) as NodeKind]).filter(Boolean))]
+  const now = new Date(backend.profile.now)
+  const ids = new Set(impact.map((x) => x.node))
+  const deadlines = [
+    ...(world?.calendar ?? []).filter((c) => ids.has(c.id)).map((c) => ({ id: c.id, what: c.title, date: c.date, gone: c.status === 'cancelled' })),
+    ...(world?.deliverables ?? []).filter((d) => ids.has(d.id) && d.deadline).map((d) => ({ id: d.id, what: `${d.kind} due`, date: d.deadline!, gone: d.status === 'removed' })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
+  const days = (d: string) => Math.ceil((new Date(`${d}T09:00:00`).getTime() - now.getTime()) / 864e5)
   const pathText = (p: string[]) => p.map((x, i) => (i % 2 ? (x === 'approves' ? 'is approved by' : x.replace(/_/g, ' ')) : label(x))).join(' ')
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13.5px] text-muted">Followed from the sponsor through the knowledge graph. Pick any item to see why it is affected.</p>
+        <p className="text-[13.5px] text-muted">Followed from the sponsor through the knowledge graph{apps.length ? <>, across {apps.length} apps: {apps.join(', ')}</> : ''}. Pick any item to see why it is affected.</p>
         <Button size="sm" variant="quiet" onClick={() => useRun.getState().set('panel', 'map')}>Open the map</Button>
       </div>
+      {deadlines.length > 0 && (
+        <section className="mt-3 rounded-sm bg-surface-2 px-3 py-2.5">
+          <h4 className="text-[12.5px] font-bold">Deadlines at risk</h4>
+          <ul className="mt-1 grid gap-x-6 gap-y-0.5 text-[12.5px] sm:grid-cols-2">
+            {deadlines.map((d) => (
+              <li key={d.id} className={clsx(d.gone && 'was')}>
+                <span className="tnum font-semibold">{new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span> {d.what}
+                <span className={clsx('ml-1', days(d.date) <= 3 && !d.gone ? 'text-fail' : 'text-faint')}>({days(d.date) <= 0 ? 'today' : `in ${days(d.date)} day${days(d.date) === 1 ? '' : 's'}`})</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="mt-3 grid gap-4 md:grid-cols-3">
         {GROUPS.map((g) => {
           const items = impact.filter((x) => x.severity === g.sev)
@@ -240,7 +307,7 @@ function ImpactStage() {
                   <li key={x.node}>
                     <button onClick={() => setOpen(open === x.node ? undefined : x.node)} aria-expanded={open === x.node}
                       className={clsx('w-full rounded-sm px-2 py-1.5 text-left hover:bg-surface-2', open === x.node && 'bg-surface-2')}>
-                      <span className="block text-[13px] font-semibold">{label(x.node)}</span>
+                      <span className="block text-[13px] font-semibold">{label(x.node)} <span className="text-[11px] font-normal text-faint">{kindOf(x.node) ? kindLabel[kindOf(x.node)!] : ''}</span></span>
                       <span className="block text-[12px] text-muted">{x.why}</span>
                     </button>
                     {open === x.node && (
@@ -532,7 +599,7 @@ export function Story() {
       {!runId && <Welcome />}
       <ol className="space-y-2.5" aria-label="What the agents are doing">
         {STAGES.map((s, i) => (
-          <Stage key={s.id} n={i + 1} id={s.id} title={s.title} idle={s.idle} status={stages[s.id]} summary={summaries[s.id]}>{content[s.id]}</Stage>
+          <Stage key={s.id} n={i + 1} id={s.id} title={s.title} idle={s.idle} status={stages[s.id]} summary={summaries[s.id]} agents={s.agents}>{content[s.id]}</Stage>
         ))}
       </ol>
     </div>

@@ -85,7 +85,7 @@ interface Store extends RunSlice {
   contextAgent?: AgentId
   toast?: { text: string; tone: 'note' | 'ok' | 'wait' | 'fail'; key: number }
   /** which detail view is open over the story */
-  panel?: 'map' | 'inbox' | 'log' | 'changes'
+  panel?: 'map' | 'inbox' | 'log' | 'changes' | 'memory'
 
   init(): Promise<void>
   start(s: ScenarioId): Promise<void>

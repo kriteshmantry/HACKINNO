@@ -3,7 +3,8 @@ import { useEffect, useMemo, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useRun } from '@/store/runStore'
 import { AGENTS, type RunEvent } from '@/lib/types'
-import { lakhs } from '@/lib/format'
+import { lakhs, rupees, shortDate } from '@/lib/format'
+import { backend } from '@/backend'
 import { agentMeta, agentStatusColor, CloseButton } from '../ui'
 import { Drawer } from '../console/Drawers'
 import { InboxPanel } from '../console/InboxPanel'
@@ -45,6 +46,11 @@ export function SideRail() {
   const agents = useRun((s) => s.agents)
   const log = useRun((s) => s.log)
   const startedAt = useRun((s) => s.startedAt)
+  const handoff = useRun((s) => s.handoff)
+  const runId = useRun((s) => s.runId)
+  const state = useRun((s) => s.state)
+  const facts = useRun((s) => s.facts)
+  const episodes = useRun((s) => s.episodes)
   const feed = useMemo(() => {
     const out: RunEvent[] = []
     for (const e of log) {
@@ -79,6 +85,28 @@ export function SideRail() {
             )
           })}
         </ul>
+        {handoff && (
+          <p className="mt-2.5 border-t border-line-soft pt-2 text-[12px] text-muted">
+            <span className="font-semibold text-text">Last handoff:</span> {handoff.from} passed to {handoff.to}: {handoff.summary}
+          </p>
+        )}
+        <p className="mt-2 text-[11.5px] text-faint">The Coordinator runs a state machine: it hands each agent a typed result and decides what happens next.</p>
+      </section>
+      <section className="rounded-md border border-line bg-surface px-4 py-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-[13px] font-bold">Memory</h2>
+          <button onClick={() => useRun.getState().set('panel', 'memory')} className="text-[12px] font-semibold text-work hover:underline">Open</button>
+        </div>
+        <dl className="mt-1.5 space-y-1.5 text-[12.5px]">
+          <div>
+            <dt className="font-semibold">Short-term</dt>
+            <dd className="text-muted">{runId ? `Run ${runId} (${state.toLowerCase().replace(/_/g, ' ')}) ` : 'The current run’s working state '}{backend.kind === 'http' ? 'is saved after every step, so a reload or restart picks it up again.' : 'is kept in this browser tab.'}</dd>
+          </div>
+          <div>
+            <dt className="font-semibold">Long-term</dt>
+            <dd className="text-muted">{facts.length} version{facts.length === 1 ? '' : 's'} of what TechNova committed{facts.length > 1 ? ', old ones kept as history' : ''}; {episodes.length} finished run{episodes.length === 1 ? '' : 's'} remembered.</dd>
+          </div>
+        </dl>
       </section>
       <section className="rounded-md border border-line bg-surface px-4 py-3">
         <div className="flex items-baseline justify-between">
@@ -126,6 +154,50 @@ function Dialog({ open, title, onClose, children }: { open: boolean; title: stri
   )
 }
 
+function MemoryView() {
+  const facts = useRun((s) => s.facts)
+  const episodes = useRun((s) => s.episodes)
+  const prefs = useRun((s) => s.preferences)
+  const sorted = [...facts].sort((a, b) => a.valid_from.localeCompare(b.valid_from))
+  return (
+    <div className="space-y-6 text-[13px]">
+      <section>
+        <h3 className="font-bold">What we believe TechNova committed, over time</h3>
+        <p className="mt-0.5 text-[12.5px] text-muted">Long-term memory is versioned. A new fact supersedes the old one instead of overwriting it, so you can still ask what was believed on any date.</p>
+        <ol className="mt-3 space-y-3 border-l border-line pl-4">
+          {sorted.map((f) => (
+            <li key={f.id} className="relative">
+              <span className={clsx('absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-xs border-2', f.status === 'current' ? 'border-text bg-text' : 'border-faint bg-surface')} aria-hidden />
+              <p><span className={clsx('text-[15px] font-bold', f.status === 'superseded' && 'was')}>{rupees(f.value)}</span> <span className={clsx('ml-1 text-[12px] font-semibold', f.status === 'current' ? 'text-ok' : f.status === 'proposed' ? 'text-wait' : 'text-faint')}>{f.status}</span></p>
+              <p className="text-[12.5px] text-muted">From {f.source_ref}, valid from {shortDate(f.valid_from)}{f.valid_to ? ` until ${shortDate(f.valid_to)}` : ''}. Confidence {f.confidence.toFixed(2)}.</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section>
+        <h3 className="font-bold">Past runs</h3>
+        <p className="mt-0.5 text-[12.5px] text-muted">Each finished run leaves a one-line summary the next run can learn from.</p>
+        {episodes.length ? (
+          <ul className="mt-2 space-y-1.5">{episodes.map((e) => <li key={e.run_id + e.at}><span className="font-mono text-[11.5px] text-faint">{e.run_id}</span> <span className="text-muted">{e.summary.replace(/(d{5,})/g, (n) => rupees(Number(n))).replace(/; rejected []/, '').replace(/outcome done: /, '')}</span></li>)}</ul>
+        ) : <p className="mt-2 text-muted">None yet. Finish a scenario and it appears here.</p>}
+      </section>
+      <section>
+        <h3 className="font-bold">Short-term memory</h3>
+        <p className="mt-0.5 text-[12.5px] text-muted">{backend.kind === 'http'
+          ? 'The run being worked on (its state, extracted change, impact, options, plans and approvals) is saved to the database after every step. Reloading this page, or restarting the server, resumes from there.'
+          : 'On the built-in simulator the run being worked on lives in this browser tab.'}</p>
+      </section>
+      {backend.profile.caps.preferences && (
+        <section>
+          <h3 className="font-bold">Learned from your edits</h3>
+          {prefs.length ? <ul className="mt-2 space-y-1">{prefs.map((p) => <li key={p.id}>{p.rule} <span className="text-muted">(from {p.source_ref})</span></li>)}</ul>
+            : <p className="mt-1 text-muted">Nothing yet. Edit an approval, for example add the treasurer to cc, and the next run does it for you.</p>}
+        </section>
+      )}
+    </div>
+  )
+}
+
 export function Panels() {
   const panel = useRun((s) => s.panel)
   const close = () => useRun.getState().set('panel', undefined)
@@ -137,6 +209,9 @@ export function Panels() {
       <Dialog open={panel === 'changes'} title="Before and after" onClose={close}><BeforeAfter /></Dialog>
       <Drawer open={panel === 'inbox'} onClose={close} title="Inbox and chat" sub="Everything the team received. The message being processed is highlighted.">
         <div className="-mx-5 -my-4 h-[calc(100vh-96px)]"><InboxPanel /></div>
+      </Drawer>
+      <Drawer open={panel === 'memory'} onClose={close} title="Memory" sub="What Second Brain remembers between messages and between runs.">
+        <MemoryView />
       </Drawer>
       <Drawer open={panel === 'log'} onClose={close} title="Full log" sub="Every step every agent took, in order, with the evidence it relied on. Export it as JSON for the audit trail.">
         <div className="-mx-5 -my-4 h-[calc(100vh-96px)]"><ActionLog /></div>
