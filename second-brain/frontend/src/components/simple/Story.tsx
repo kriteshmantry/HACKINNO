@@ -513,10 +513,11 @@ function ChangeStage() {
   const plans = useRun((s) => s.plans)
   const preempted = useRun((s) => s.preempted)
   const replans = useRun((s) => s.replans)
+  const edited = useRun((s) => s.chosen === 'H')
   if (!actions.length) return <p className="text-[13px] text-muted">Writing the plan…</p>
   const finished = actions.filter((a) => ['done', 'skipped_duplicate'].includes(statuses[a.id])).length
   const latest = plans[plans.length - 1]
-  const failedTools = new Set(actions.filter((a) => statuses[a.id] === 'failed').map((a) => a.tool))
+  const failedTools = new Set(plans.flatMap((p) => p.actions).filter((a) => statuses[a.id] === 'failed').map((a) => a.tool))
   return (
     <div>
       <div className="flex items-center gap-3">
@@ -528,6 +529,7 @@ function ChangeStage() {
           <span className="font-semibold">The plan was updated {plans.length - 1} time{plans.length > 2 ? 's' : ''}.</span>{' '}
           <span className="text-muted">{preempted ? `Newer information arrived in ${preempted.by}, so only what still differs was planned again.`
             : failedTools.size ? `${[...failedTools].join(', ')} kept failing, so a safe fallback took its place.`
+              : edited ? 'You set your own budget amounts, so everything that depends on them was planned again from your numbers.'
               : replans ? 'A check found something out of place, so only that part was planned again.' : 'Only what still differs from the target is planned again.'}</span>
         </p>
       )}
