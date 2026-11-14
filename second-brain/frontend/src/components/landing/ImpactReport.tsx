@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { backend } from '@/backend'
 import { impacted } from '@/lib/impact'
+import { DEMO_NOW, GRAPH, SCENARIO_MESSAGES } from '@/backend/mock/seed'
 import type { GraphData, ImpactNode, InboxMessage } from '@/lib/types'
 import { severityColor, Skeleton } from '../ui'
 
@@ -17,6 +18,12 @@ function findSpan(body: string): string | undefined {
   return m?.[0].trim()
 }
 
+/** The same report from the simulator's own seed: used when the backend is offline or incomplete. */
+function seedReport(): Report {
+  const message = SCENARIO_MESSAGES['e-19']
+  return { message, span: findSpan(message.body), graph: GRAPH, nodes: impacted(GRAPH, 'sp-technova', new Date(DEMO_NOW)) }
+}
+
 export function useImpactReport() {
   const [report, setReport] = useState<Report | null>(null)
   const [error, setError] = useState(false)
@@ -26,11 +33,17 @@ export function useImpactReport() {
       try {
         await backend.ready()
         const [inbox, graph] = await Promise.all([backend.getInbox(), backend.getGraph()])
+        // the simulator only delivers the trigger email when a scenario runs, so look in its scenario messages too
         const message = inbox.find((m) => m.id === backend.profile.triggerMessage)
+          ?? (backend.kind === 'mock' ? SCENARIO_MESSAGES[backend.profile.triggerMessage] : undefined)
         if (!message) throw new Error('no trigger message')
         const nodes = impacted(graph, backend.profile.primarySponsor, new Date(backend.profile.now))
+        if (!nodes.length) throw new Error('empty impact report')
         if (live) setReport({ message, span: findSpan(message.body), graph, nodes })
-      } catch { if (live) setError(true) }
+      } catch {
+        // the hero must never be empty: fall back to the simulator's identical seed data
+        try { if (live) setReport(seedReport()) } catch { if (live) setError(true) }
+      }
     })()
     return () => { live = false }
   }, [])
