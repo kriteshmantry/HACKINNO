@@ -20,7 +20,7 @@ One command starts both servers (it creates the virtualenv and installs dependen
 powershell -ExecutionPolicy Bypass -File second-brain\run-demo.ps1
 ```
 
-Then open http://localhost:5173. The console talks to this backend through the Vite proxy (`/api` to port 8000). If the backend is not running, the console falls back to a built-in simulator so the demo still works offline; the header says which one you are on. See [frontend/README.md](frontend/README.md) and [frontend/INTEGRATION.md](frontend/INTEGRATION.md).
+Then open http://localhost:5173. The script keeps the SQLite database in `%LOCALAPPDATA%SecondBrain` (set `SB_DATA_DIR` to change it), so OneDrive or Dropbox syncing this folder cannot lock it mid-write. The console talks to this backend through the Vite proxy (`/api` to port 8000). If the backend is not running, the console falls back to a built-in simulator so the demo still works offline; the header says which one you are on. See [frontend/README.md](frontend/README.md) and [frontend/INTEGRATION.md](frontend/INTEGRATION.md).
 
 ## Run the backend on its own
 

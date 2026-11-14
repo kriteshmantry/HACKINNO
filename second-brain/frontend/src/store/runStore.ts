@@ -86,6 +86,10 @@ interface Store extends RunSlice {
   toast?: { text: string; tone: 'note' | 'ok' | 'wait' | 'fail'; key: number }
   /** which detail view is open over the story */
   panel?: 'map' | 'inbox' | 'log' | 'changes' | 'memory'
+  /** a scenario that has been asked for but has no run yet */
+  starting?: ScenarioId
+  /** why the last scenario could not start, shown in place of the chooser */
+  startError?: { scenario: ScenarioId; message: string }
 
   init(): Promise<void>
   start(s: ScenarioId): Promise<void>
@@ -307,20 +311,26 @@ export const useRun = create<Store>((set, get) => {
     async start(sc) {
       try {
         unsubscribe?.()
-        set({ ...emptyRun(), scenario: sc, selectedNode: undefined, modalApproval: undefined, modalDismissed: false, traceAction: undefined, tab: 'options', toast: undefined })
+        set({ ...emptyRun(), scenario: sc, starting: sc, startError: undefined, selectedNode: undefined, modalApproval: undefined, modalDismissed: false, traceAction: undefined, tab: 'options', toast: undefined })
+        await backend.ready()
+        if (get().fault !== 'off') await backend.setFault(backend.profile.faultTool, get().fault)
         const { run_id } = await backend.startScenario(sc)
-        if (get().fault !== 'off') await backend.setFault('budget.set_line', get().fault)
         const [world, inbox, facts] = await Promise.all([backend.getState(), backend.getInbox(), backend.getFacts(backend.profile.primarySponsor)])
-        set({ runId: run_id, world, baseline: structuredClone(world), inbox, facts })
+        // if the first load failed (backend was down), fill in what the console never got
+        const graph = get().graph ?? await backend.getGraph()
+        set({ runId: run_id, starting: undefined, error: undefined, world, baseline: structuredClone(world), inbox, facts, graph, ready: true })
         attach(run_id)
-      } catch (e) { fail(e) }
+      } catch (e) {
+        // say what went wrong where the scenario would have appeared, with a way to retry
+        set({ starting: undefined, startError: { scenario: sc, message: e instanceof Error ? e.message : String(e) } })
+      }
     },
 
     async reset() {
       try {
         unsubscribe?.()
         await backend.reset()
-        set({ ...emptyRun(), scenario: undefined, selectedNode: undefined, modalApproval: undefined, traceAction: undefined, toast: undefined })
+        set({ ...emptyRun(), scenario: undefined, starting: undefined, startError: undefined, selectedNode: undefined, modalApproval: undefined, traceAction: undefined, toast: undefined })
         await get().init()
         if (get().fault !== 'off') await backend.setFault('budget.set_line', get().fault)
       } catch (e) { fail(e) }

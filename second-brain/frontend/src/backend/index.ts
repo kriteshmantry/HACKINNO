@@ -36,9 +36,15 @@ class AutoBackend implements Backend {
   get kind() { return this.impl.kind }
   get profile(): BackendProfile { return this.impl.profile }
   get requested() { return this.m }
-  ready() { return this.choice }
+  /** A failed connection check is retried on the next call, so starting the backend later just works. */
+  ready() {
+    return this.choice.catch(() => {
+      this.choice = this.impl.ready()
+      return this.choice
+    })
+  }
 
-  private async go<T>(f: (b: Backend) => Promise<T>) { await this.choice; return f(this.impl) }
+  private async go<T>(f: (b: Backend) => Promise<T>) { await this.ready(); return f(this.impl) }
   reset() { return this.go((b) => b.reset()) }
   getState() { return this.go((b) => b.getState()) }
   getInbox() { return this.go((b) => b.getInbox()) }
@@ -50,7 +56,7 @@ class AutoBackend implements Backend {
   subscribe(runId: string, onEvent: (e: RunEvent) => void, onStatus: (s: StreamStatus) => void) {
     let off: (() => void) | undefined
     let cancelled = false
-    this.choice.then(() => { if (!cancelled) off = this.impl.subscribe(runId, onEvent, onStatus) })
+    this.ready().then(() => { if (!cancelled) off = this.impl.subscribe(runId, onEvent, onStatus) }, () => onStatus('closed'))
     return () => { cancelled = true; off?.() }
   }
   chooseOption(runId: string, o: string) { return this.go((b) => b.chooseOption(runId, o)) }

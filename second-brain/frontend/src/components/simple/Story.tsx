@@ -558,6 +558,27 @@ function useSummaries(): Record<StageId, ReactNode> {
   }
 }
 
+function Starting({ id }: { id: ScenarioId }) {
+  const sc = backend.profile.scenarios[id]
+  return (
+    <section role="status" className="rounded-md border border-text/50 bg-surface px-5 py-4">
+      <p className="flex items-center gap-2 text-[16px] font-bold"><Spinner /> Starting {id}: {sc.name}</p>
+      <p className="mt-1 text-[13.5px] text-muted">Resetting the workspace and handing the message to the agents. The steps below fill in as they work.</p>
+    </section>
+  )
+}
+
+function StartFailed({ id, message }: { id: ScenarioId; message: string }) {
+  return (
+    <section role="alert" className="rounded-md border border-fail bg-surface px-5 py-4">
+      <p className="text-[16px] font-bold text-fail">{id}: {backend.profile.scenarios[id].name} could not start</p>
+      <p className="mt-1 text-[13.5px] text-muted">{message}</p>
+      <p className="mt-1 text-[13px] text-muted">{backend.kind === 'http' ? 'Check that the backend is running (run-demo.ps1 starts it), then try again.' : 'Try again.'}</p>
+      <Button variant="primary" className="mt-3" onClick={() => useRun.getState().start(id)}>Try {id} again</Button>
+    </section>
+  )
+}
+
 function Welcome() {
   const { profile } = backend
   return (
@@ -583,6 +604,8 @@ function Welcome() {
 export function Story() {
   const stages = useStages()
   const runId = useRun((s) => s.runId)
+  const starting = useRun((s) => s.starting)
+  const startError = useRun((s) => s.startError)
   const summaries = useSummaries()
   // bring the stage that needs attention into view when it changes
   const focus = STAGES.find((s) => stages[s.id] === 'needs')?.id ?? STAGES.find((s) => stages[s.id] === 'active')?.id
@@ -596,7 +619,9 @@ export function Story() {
   const content: Record<StageId, ReactNode> = { read: <ReadStage />, impact: <ImpactStage />, decide: <DecideStage />, change: <ChangeStage />, check: <CheckStage /> }
   return (
     <div className="space-y-3">
-      {!runId && <Welcome />}
+      {!runId && starting && <Starting id={starting} />}
+      {!runId && !starting && startError && <StartFailed id={startError.scenario} message={startError.message} />}
+      {!runId && !starting && !startError && <Welcome />}
       <ol className="space-y-2.5" aria-label="What the agents are doing">
         {STAGES.map((s, i) => (
           <Stage key={s.id} n={i + 1} id={s.id} title={s.title} idle={s.idle} status={stages[s.id]} summary={summaries[s.id]} agents={s.agents}>{content[s.id]}</Stage>

@@ -40,6 +40,9 @@ export default function Console() {
     if (booted.current) return // StrictMode runs effects twice in dev
     booted.current = true
     document.title = 'Second Brain console'
+    const asked = params.get('scenario') as ScenarioId | null
+    // a scenario link starts straight away: show it starting, never the chooser
+    if (asked && ['S1', 'S2', 'S3', 'S4'].includes(asked) && !params.get('run')) useRun.getState().set('starting', asked)
     useRun.getState().init().then(() => {
       const sc = params.get('scenario') as ScenarioId | null
       const run = params.get('run')
