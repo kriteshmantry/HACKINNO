@@ -7,9 +7,7 @@
     "old_amount": 500000,
     "effective_date": null,
     "evidence_span": "₹3,00,000",
-    "ambiguity_notes": [
-      "can commit"
-    ],
+    "ambiguity_notes": [],
     "self_confidence": 0.99
   }
 }

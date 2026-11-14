@@ -47,14 +47,19 @@ function MenuItem({ title, hint, onClick, disabled, why }: { title: string; hint
 
 function ScenarioMenu() {
   const scenario = useRun((s) => s.scenario)
+  const runId = useRun((s) => s.runId)
+  const state = useRun((s) => s.state)
   const { profile } = backend
+  const running = !!runId && !['DONE', 'QUARANTINED', 'IGNORED', 'ESCALATE', 'IDLE'].includes(state)
   return (
     <Popover label={<><span className="sm:hidden">Run</span><span className="hidden sm:inline">Run a scenario</span></>} variant="primary">
       {(close) => (
         <div>
-          <p className="px-3 pb-1 pt-1.5 text-[12px] text-muted">Each scenario resets the workspace and plays one message through the agents.</p>
+          <p className="px-3 pb-1 pt-1.5 text-[12px] text-muted">
+            Pick one to run. It resets the workspace and plays its message through the agents{running ? '; the run in progress stops' : ''}.
+          </p>
           {(Object.keys(profile.scenarios) as ScenarioId[]).map((id) => (
-            <MenuItem key={id} title={`${id}: ${profile.scenarios[id]!.name}${scenario === id ? ' (last run)' : ''}`} hint={profile.scenarios[id]!.hint}
+            <MenuItem key={id} title={`${id}: ${profile.scenarios[id]!.name}${scenario === id ? (running ? ' (running now)' : ' (last run)') : ''}`} hint={profile.scenarios[id]!.hint}
               onClick={() => { close(); useRun.getState().start(id) }} />
           ))}
         </div>

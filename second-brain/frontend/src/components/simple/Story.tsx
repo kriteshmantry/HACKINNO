@@ -669,14 +669,16 @@ function StartFailed({ id, message }: { id: ScenarioId; message: string }) {
 }
 
 /** A scenario to start: lifts under the pointer, shows a loading bar inside itself once clicked. */
-function ScenarioCard({ id, i }: { id: ScenarioId; i: number }) {
+function ScenarioCard({ id, i, current, running }: { id: ScenarioId; i: number; current?: boolean; running?: boolean }) {
   const sc = backend.profile.scenarios[id]!
   const click = useAsyncClick(() => useRun.getState().start(id))
   return (
     <li className="rise" style={{ animationDelay: `${120 + i * 60}ms` }}>
       <button onClick={click.onClick} disabled={click.pending} aria-busy={click.pending || undefined}
         className="lift relative h-full w-full overflow-hidden rounded-sm border border-line bg-surface px-3 py-2.5 text-left hover:border-text/40 disabled:cursor-progress">
-        <span className="block text-[14px] font-bold">{id}: {sc.name}{id === 'S1' && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
+        <span className="block text-[14px] font-bold">{id}: {sc.name}
+          {current ? <span className="ml-2 text-[12px] font-semibold text-work">{running ? 'running now' : 'last run'}</span>
+            : id === 'S1' && current === undefined && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
         <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{click.pending ? 'Starting…' : sc.hint}</span>
         {click.pending && <span className="text-work"><LoadBar /></span>}
       </button>
@@ -692,6 +694,23 @@ function Score({ value, className, style }: { value: number; className?: string;
 /** A rupee amount that counts up to its value. */
 function Rupees({ value }: { value: number }) {
   return <>{rupees(Math.round(useCountUp(value, 900)))}</>
+}
+
+/** Always on the page once a run exists: pick the next scenario without hunting for the menu. */
+function MoreScenarios() {
+  const state = useRun((s) => s.state)
+  const scenario = useRun((s) => s.scenario)
+  const running = !['DONE', 'QUARANTINED', 'IGNORED', 'ESCALATE', 'IDLE'].includes(state)
+  const ids = Object.keys(backend.profile.scenarios) as ScenarioId[]
+  return (
+    <section aria-label="Run a scenario" className="rise rounded-md border border-line bg-surface px-4 py-4">
+      <h3 className="text-[15px] font-bold">{running ? 'Run a different scenario' : 'Run another scenario'}</h3>
+      <p className="text-[12.5px] text-muted">Each one resets the workspace and plays its message through the agents{running ? '. The run in progress stops' : ''}.</p>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+        {ids.map((id, i) => <ScenarioCard key={id} id={id} i={i} current={id === scenario} running={running} />)}
+      </ul>
+    </section>
+  )
 }
 
 function Welcome() {
@@ -736,6 +755,7 @@ export function Story() {
         ))}
       </ol>
       <NegotiationCard />
+      {runId && <MoreScenarios />}
     </div>
   )
 }
