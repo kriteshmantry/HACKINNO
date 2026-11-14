@@ -12,6 +12,7 @@ import { ContextInspector, TraceDrawer } from '@/components/console/Drawers'
 import { Toast } from '@/components/console/Feedback'
 import { WatchPanels } from '@/components/watch/WatchPanels'
 import { useWatch } from '@/store/watchStore'
+import { splash } from '@/lib/splash'
 
 /** Same layout as the loaded console, so nothing jumps when data arrives. */
 function ConsoleSkeleton() {
@@ -34,6 +35,7 @@ function ConsoleSkeleton() {
 
 export default function Console() {
   const ready = useRun((s) => s.ready)
+  useEffect(() => { if (ready) splash.hide() }, [ready])
   const error = useRun((s) => s.error)
   const [params] = useSearchParams()
   const booted = useRef(false)

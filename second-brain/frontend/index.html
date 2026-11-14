@@ -9,8 +9,86 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      // apply the saved Day/Night theme before the first paint, so the loading screen matches it
+      try { var t = localStorage.getItem('sb-theme'); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t } catch (e) {}
+    </script>
+    <style>
+      /* Loading screen: inline so it paints before any JavaScript or app CSS arrives. */
+      #splash {
+        --s-bg: #e6e9ec; --s-ink: #141b24; --s-muted: #4c5763; --s-track: #d7dbe0; --s-work: #1f5e9c;
+        position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center;
+        background: var(--s-bg); color: var(--s-ink);
+        font-family: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+        transition: opacity 420ms ease, visibility 420ms;
+      }
+      [data-theme="dark"] #splash { --s-bg: #17191c; --s-ink: #e8eaed; --s-muted: #a3aab3; --s-track: #2e3238; --s-work: #84abd8; }
+      #splash.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+      #splash .card { width: min(340px, calc(100vw - 48px)); text-align: center; }
+      #splash svg { display: block; margin: 0 auto 18px; overflow: visible; }
+      #splash .a { animation: s-in 420ms cubic-bezier(.2,.7,.2,1) both; transform-origin: 9px 9px; }
+      #splash .link { stroke-dasharray: 24; stroke-dashoffset: 24; animation: s-draw 520ms 300ms cubic-bezier(.4,0,.2,1) forwards; }
+      #splash .b { stroke-dasharray: 32; stroke-dashoffset: 32; animation: s-draw 520ms 700ms cubic-bezier(.4,0,.2,1) forwards, s-pulse 1.8s 1.4s ease-in-out infinite; transform-origin: 39px 39px; }
+      #splash h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; animation: s-rise 500ms 250ms cubic-bezier(.2,.7,.2,1) both; }
+      #splash p.tag { margin: 4px 0 22px; font-size: 13px; color: var(--s-muted); animation: s-rise 500ms 380ms cubic-bezier(.2,.7,.2,1) both; }
+      #splash .track { position: relative; height: 4px; border-radius: 4px; background: var(--s-track); overflow: hidden; }
+      #splash .fill { position: absolute; inset: 0 auto 0 0; width: 8%; border-radius: 4px; background: var(--s-ink); transition: width 500ms cubic-bezier(.2,.7,.2,1); }
+      #splash .fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent); animation: s-sheen 1.1s linear infinite; }
+      #splash .row { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 12.5px; color: var(--s-muted); }
+      #splash .row b { font-weight: 600; color: var(--s-ink); }
+      #splash .pct { font-variant-numeric: tabular-nums; }
+      @keyframes s-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+      @keyframes s-draw { to { stroke-dashoffset: 0; } }
+      @keyframes s-pulse { 50% { transform: scale(1.08); } }
+      @keyframes s-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      @keyframes s-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *, #splash *::after { animation: none !important; stroke-dashoffset: 0 !important; transition: none !important; }
+        #splash { transition: none; }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-live="polite" aria-label="Loading Second Brain">
+      <div class="card">
+        <svg width="56" height="56" viewBox="0 0 48 48" aria-hidden="true">
+          <rect class="a" x="2" y="2" width="16" height="16" rx="2" fill="currentColor" />
+          <path class="link" d="M18 10 H38 V30" fill="none" stroke="currentColor" stroke-width="3" />
+          <rect class="b" x="30" y="30" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="3" />
+        </svg>
+        <h1>Second Brain</h1>
+        <p class="tag">Catching one sponsor change across every app it touches</p>
+        <div class="track" aria-hidden="true"><div class="fill" id="splash-fill"></div></div>
+        <div class="row"><b id="splash-step">Loading the interface</b><span class="pct" id="splash-pct">8%</span></div>
+      </div>
+    </div>
+    <script>
+      // A tiny API the app uses to report progress and dismiss the screen (see src/lib/splash.ts).
+      (function () {
+        var el = document.getElementById('splash'), shownAt = Date.now(), done = false, pct = 8;
+        function step(text, p) {
+          if (done) return;
+          if (text) document.getElementById('splash-step').textContent = text;
+          if (typeof p === 'number' && p > pct) {
+            pct = Math.min(100, p);
+            document.getElementById('splash-fill').style.width = pct + '%';
+            document.getElementById('splash-pct').textContent = Math.round(pct) + '%';
+          }
+        }
+        function hide() {
+          if (done) return;
+          // the screen stays for 2.5 s in total; the bar fills to 100% over whatever time is left
+          var wait = Math.max(250, 2500 - (Date.now() - shownAt));
+          document.getElementById('splash-fill').style.transition = 'width ' + wait + 'ms cubic-bezier(.4,0,.2,1)';
+          step('Ready', 100); done = true;
+          setTimeout(function () { el.classList.add('gone'); setTimeout(function () { el.remove() }, 500) }, wait);
+        }
+        // creep forward while nothing reports, so the bar never looks frozen
+        var creep = setInterval(function () { if (done) return clearInterval(creep); if (pct < 85) step(null, pct + (85 - pct) * 0.06) }, 400);
+        window.__splash = { step: step, hide: hide };
+        setTimeout(hide, 15000); // never block the page, whatever happens
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

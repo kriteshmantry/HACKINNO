@@ -108,7 +108,7 @@ class ImpactReport(BaseModel):
 
 
 class Option(BaseModel):
-    id: Literal["A", "B", "C"]
+    id: Literal["A", "B", "C", "H"]          # H = amounts a person set while approving
     name: str
     strategy: str
     cuts: dict[str, int]               # line_id -> new amount

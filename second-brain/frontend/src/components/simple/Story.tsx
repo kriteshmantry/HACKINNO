@@ -106,10 +106,78 @@ function Disclosure({ label, children }: { label: string; children: ReactNode })
 /* ------------------------------------------------------------------ */
 /* Inline decisions                                                    */
 /* ------------------------------------------------------------------ */
+/** "2,40,000", "240000", "2.4L", "75k" -> rupees; NaN when it cannot be read. */
+function parseRupees(s: string): number {
+  const t = s.trim().toLowerCase().replace(/[₹,\s]/g, '').replace(/^rs\.?/, '')
+  const m = /^(\d+(?:\.\d+)?)(l|lakh|lakhs|k)?$/.exec(t)
+  if (!m) return NaN
+  const n = Number(m[1]) * (m[2] === 'k' ? 1_000 : m[2] ? 100_000 : 1)
+  return Math.round(n)
+}
+
+/** Edit the budget line amounts before approving; everything after is re-planned from them. */
+function BudgetEditor({ ap, onClose }: { ap: Approval; onClose: () => void }) {
+  const world = useRun((s) => s.world)
+  const shortfall = useRun((s) => s.computed?.shortfall ?? 0)
+  const proposed = useMemo(() => new Map(((ap.args.changes as { line_id: string; new: number }[]) ?? []).map((c) => [c.line_id, c.new])), [ap.args])
+  const lines = useMemo(() => (world?.budget ?? []).filter((b) => b.cuttable || proposed.has(b.id))
+    .sort((a, b) => Number(proposed.has(b.id)) - Number(proposed.has(a.id)) || (a.priority ?? 0) - (b.priority ?? 0)), [world, proposed])
+  const initial = () => Object.fromEntries(lines.map((l) => [l.id, String(proposed.get(l.id) ?? l.amount)]))
+  const [vals, setVals] = useState<Record<string, string>>(initial)
+  const parsed = lines.map((l) => ({ l, v: parseRupees(vals[l.id] ?? '') }))
+  const bad = parsed.filter(({ l, v }) => Number.isNaN(v) || v < l.floor)
+  const cut = parsed.reduce((s, { l, v }) => s + (Number.isNaN(v) ? 0 : l.amount - v), 0)
+  const open = Math.max(0, shortfall - cut)
+  const changed = parsed.some(({ l, v }) => v !== (proposed.get(l.id) ?? l.amount))
+  const submit = () => useRun.getState().decide(ap.id, {
+    decision: 'edit', reason: 'amounts set by a person',
+    args: { changes: parsed.map(({ l, v }) => ({ line_id: l.id, new: v })) },
+  })
+  return (
+    <div className="rise mt-2 rounded-sm border border-line bg-surface px-3 py-2.5">
+      <p className="text-[12.5px] font-semibold">Set your own amounts</p>
+      <p className="text-[12px] text-muted">Everything after this step (the open gap, the prize-pool approval, the messages and the checks) is re-planned from your numbers. You can type 240000, 2,40,000 or 2.4L.</p>
+      <table className="mt-2 w-full text-[12.5px]">
+        <thead><tr className="text-left text-[11.5px] text-faint"><th className="py-1 font-semibold">Line</th><th className="font-semibold">Now</th><th className="font-semibold">New amount</th><th className="text-right font-semibold">Floor</th></tr></thead>
+        <tbody>
+          {parsed.map(({ l, v }) => {
+            const wrong = Number.isNaN(v) || v < l.floor
+            return (
+              <tr key={l.id} className="border-t border-line-soft">
+                <td className="py-1.5 pr-2 font-semibold">{l.category}{proposed.has(l.id) && <span className="ml-1.5 text-[11px] font-normal text-faint">proposed</span>}</td>
+                <td className="tnum pr-2 text-muted">{rupees(l.amount)}</td>
+                <td className="pr-2">
+                  <input value={vals[l.id] ?? ''} inputMode="numeric" aria-label={`New amount for ${l.category}`} aria-invalid={wrong}
+                    onChange={(e) => setVals({ ...vals, [l.id]: e.target.value })}
+                    className={clsx('h-7 w-28 rounded-sm border bg-surface px-2 text-[12.5px] outline-none', wrong ? 'border-fail text-fail' : 'border-line focus:border-work')} />
+                  {!Number.isNaN(v) && v !== l.amount && !wrong && <span className={clsx('tnum ml-1.5 text-[11.5px]', v < l.amount ? 'text-fail' : 'text-ok')}>{v < l.amount ? '−' : '+'}{lakhs(Math.abs(l.amount - v))}</span>}
+                </td>
+                <td className="tnum text-right text-faint">{rupees(l.floor)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <p className={clsx('mt-2 text-[12.5px]', bad.length ? 'text-fail' : open ? 'text-wait' : 'text-ok')}>
+        {bad.length ? `${bad.map(({ l }) => l.category).join(', ')}: ${bad.some(({ v }) => Number.isNaN(v)) ? 'enter an amount' : 'cannot go below the floor'}.`
+          : <>Your amounts free up <span className="font-semibold">{rupees(Math.max(0, cut))}</span> of the {rupees(shortfall)} shortfall
+            {open ? <>; <span className="font-semibold">{rupees(open)}</span> will be recorded as an open gap.</> : cut > shortfall ? <>, {rupees(cut - shortfall)} more than needed.</> : ', so it is fully covered.'}</>}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button size="sm" variant="primary" disabled={!!bad.length || !changed} onClick={submit}>Approve with my amounts</Button>
+        <Button size="sm" variant="ghost" onClick={() => setVals(initial())}>Back to the proposal</Button>
+        <Button size="sm" variant="ghost" onClick={onClose}>Cancel</Button>
+      </div>
+    </div>
+  )
+}
+
 function ApprovalInline({ ap }: { ap: Approval }) {
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(false)
   const { decide, openApproval } = useRun.getState()
   const approve = async () => { setBusy(true); await decide(ap.id, { decision: 'approve' }); setBusy(false) }
+  const budget = ap.tool === 'budget.set_lines'
   return (
     <div className="mt-2 rounded-sm border border-wait/50 bg-wait-soft px-3 py-2.5">
       <p className="text-[13px]"><span className="font-semibold">Needs your OK.</span> <span className="text-muted">{ap.rationale}</span></p>
@@ -122,10 +190,14 @@ function ApprovalInline({ ap }: { ap: Approval }) {
         </ul>
       )}
       {ap.risk_reasons.length > 0 && <p className="mt-1 text-[12px] text-muted">Why it needs you: {ap.risk_reasons.map((r) => r.replace(/^[+-]d+s+/, '')).join('; ')}.</p>}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button size="sm" variant="primary" disabled={busy} onClick={approve}>Approve</Button>
-        <Button size="sm" variant="quiet" onClick={() => openApproval(ap.id)}>{ap.editable.length ? 'Review or edit' : 'Review'}</Button>
-      </div>
+      {!editing && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button size="sm" variant="primary" disabled={busy} onClick={approve}>Approve</Button>
+          {budget && <Button size="sm" variant="quiet" onClick={() => setEditing(true)}>Edit amounts</Button>}
+          <Button size="sm" variant="quiet" onClick={() => openApproval(ap.id)}>{ap.editable.length ? 'Review or edit' : 'Review'}</Button>
+        </div>
+      )}
+      {editing && <BudgetEditor ap={ap} onClose={() => setEditing(false)} />}
     </div>
   )
 }

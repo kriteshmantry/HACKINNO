@@ -54,7 +54,9 @@ async def request(ctx: RunCtx, action: PlannedAction) -> dict:
         "SELECT * FROM approvals_queue WHERE run_id=? AND action_key=? AND tool=? "
         "AND status IN ('approved','edited','rejected') ORDER BY created_at DESC LIMIT 1",
         (ctx.run_id, action.key, action.tool))
-    if prev and _strip(prev["original_args"]) == _strip(action.args):
+    # the same decision covers the same step in a later plan version, including the edited form of it
+    if prev and (_strip(prev["original_args"]) == _strip(action.args)
+                 or (prev["status"] == "edited" and _strip(prev["final_args"]) == _strip(action.args))):
         ctx.emit("approval.reused", f"Reusing earlier decision '{prev['status']}' for {action.key}",
                  {"approval_id": prev["id"], "action_id": action.id})
         return prev
@@ -85,6 +87,29 @@ async def request(ctx: RunCtx, action: PlannedAction) -> dict:
     return db.query_one("SELECT * FROM approvals_queue WHERE id=?", (ap_id,))
 
 
+def budget_edit(args: dict | None) -> dict:
+    """Validate amounts a person typed into a budget approval and put them in the planner's form
+    ({line_id, new, expect} sorted by line), so a later plan version can reuse the decision."""
+    lines = {l["id"]: l for l in db.query("SELECT * FROM budget_lines")}
+    out = []
+    for c in (args or {}).get("changes") or []:
+        lid = c.get("line_id")
+        if lid not in lines:
+            raise ValueError(f"unknown budget line {lid}")
+        try:
+            new = int(c.get("new"))
+        except (TypeError, ValueError):
+            raise ValueError(f"{lines[lid]['category']}: the amount must be a whole number of rupees")
+        line = lines[lid]
+        if new < line["floor"]:
+            raise ValueError(f"{line['category']} cannot go below its floor of ₹{line['floor']:,}")
+        if new != line["amount"]:
+            out.append({"line_id": lid, "new": new, "expect": line["amount"]})
+    if not out:
+        raise ValueError("these amounts change nothing; reject the step instead if no line should change")
+    return {"changes": sorted(out, key=lambda c: c["line_id"])}
+
+
 def decide(ap_id: str, decision: str, args: dict | None = None, reason: str | None = None,
            by: str = "demo-user") -> dict:
     row = db.query_one("SELECT * FROM approvals_queue WHERE id=?", (ap_id,))
@@ -95,7 +120,12 @@ def decide(ap_id: str, decision: str, args: dict | None = None, reason: str | No
     if decision not in ("approve", "reject", "edit"):
         raise ValueError("decision must be approve | reject | edit")
     status = {"approve": "approved", "reject": "rejected", "edit": "edited"}[decision]
-    final = dict(row["original_args"], **(args or {})) if decision == "edit" else row["original_args"]
+    if decision == "edit" and row["tool"] == "budget.set_lines":
+        final = dict(row["original_args"], **budget_edit(args))
+        if final["changes"] == row["original_args"]["changes"]:
+            status = "approved"            # nothing actually changed
+    else:
+        final = dict(row["original_args"], **(args or {})) if decision == "edit" else row["original_args"]
     db.execute("UPDATE approvals_queue SET status=?, final_args=?, reason=?, decided_by=?, decided_at=? "
                "WHERE id=?", (status, json.dumps(final), reason, by, datetime.now().isoformat(), ap_id))
     from .events import emit

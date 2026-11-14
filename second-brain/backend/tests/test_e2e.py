@@ -208,3 +208,52 @@ def test_memory_overview_lists_finished_runs():
     r = run("e-19")
     eps = context.memory_overview()["episodes"]
     assert eps and eps[0]["run_id"] == r.id
+
+
+def _edit_budget(amounts):
+    def decide(ap):
+        if ap["tool"] == "budget.set_lines":
+            return "edit", {"changes": [{"line_id": k, "new": v} for k, v in amounts.items()]}, "my numbers"
+        return "approve", None, None
+    return decide
+
+
+def test_edited_budget_amounts_drive_the_rest_of_the_run():
+    # option A would cut food 3L->2.5L, marketing 1.5L->75k, swag 1L->25k (2L in all); the person
+    # keeps more of marketing and swag, so 1.6L is covered and 40k must be recorded as an open gap
+    mine = {"bl-food": 240000, "bl-marketing": 100000, "bl-swag": 50000}
+    r = run("e-19", decide=_edit_budget(mine))
+    assert r.state == "DONE", (r.outcome, r.error, r.meta.get("validation_errors"))
+    assert r.verification.ok, [c for c in r.verification.checks if not c.ok]
+    assert r.chosen_option == "H" and len(r.plan_history) == 2
+    lines = {l["id"]: l["amount"] for l in db.query("SELECT id, amount FROM budget_lines")}
+    assert all(lines[k] == v for k, v in mine.items())
+    assert db.query_one("SELECT amount FROM gaps WHERE sponsor_id='s-technova'")["amount"] == 40000
+    asked = db.query("SELECT status FROM approvals_queue WHERE action_key='budget.lines'")
+    assert [a["status"] for a in asked] == ["edited"]          # asked once; plan v2 reused the edit
+    assert r.replans == 0                                      # an edit is not a failure
+    chat = db.query_one("SELECT body FROM outbox WHERE recipient='#core-team'")["body"]
+    assert "option H" in chat and "₹40,000" in chat            # messages quote the person's numbers
+
+
+def test_edited_budget_below_floor_is_refused():
+    import pytest
+    r = coordinator.create_run("e-19", 0)
+
+    async def go():
+        task = asyncio.create_task(coordinator.drive(r))
+        while True:
+            await asyncio.sleep(0.05)
+            ap = db.query_one("SELECT * FROM approvals_queue WHERE status='pending' AND tool='budget.set_lines'")
+            if ap:
+                break
+        with pytest.raises(ValueError, match="floor"):
+            approvals.decide(ap["id"], "edit", {"changes": [{"line_id": "bl-food", "new": 100000}]})
+        approvals.decide(ap["id"], "approve")
+        while not task.done():
+            await asyncio.sleep(0.05)
+            for x in db.query("SELECT id FROM approvals_queue WHERE status='pending'"):
+                approvals.decide(x["id"], "approve")
+        return await task
+    out = asyncio.run(go())
+    assert out.state == "DONE" and out.chosen_option == "A"

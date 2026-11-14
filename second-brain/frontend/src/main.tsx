@@ -4,11 +4,13 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './styles/index.css'
 import Landing from './pages/Landing'
 import { applyStoredTheme } from './lib/theme'
+import { splash } from './lib/splash'
 
 // The console pulls in React Flow, dagre and the simulator; keep the landing page light.
 const Console = lazy(() => import('./pages/Console'))
 
 applyStoredTheme()
+splash.step('Starting the app', 25)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

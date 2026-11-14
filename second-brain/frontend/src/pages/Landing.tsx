@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ImpactReport, TriggerEmail, useImpactReport } from '@/components/landing/ImpactReport'
 import { ThemeToggle, Wordmark } from '@/components/ui'
+import { splash } from '@/lib/splash'
 
 /** A table on wide screens; label/value stacks on phones. */
 function Rows({ head, rows, caption }: { head: string[]; rows: ReactNode[][]; caption: string }) {
@@ -65,7 +66,7 @@ const SCENARIOS: { id: string; name: string; text: string }[] = [
 ]
 
 export default function Landing() {
-  useEffect(() => { document.title = 'Second Brain' }, [])
+  useEffect(() => { document.title = 'Second Brain'; splash.hide() }, [])
   const { report, error } = useImpactReport()
   return (
     <div className="min-h-screen bg-bg">

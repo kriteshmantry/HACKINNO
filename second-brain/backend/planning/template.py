@@ -138,7 +138,7 @@ def build(run_id: str, version: int, rc: ResolvedChange, option: Option | None, 
             {"sponsor_id": sid, "amount": gap, "source_ref": rc.change_id,
              "note": f"Uncovered after {name} change{f' and option {option.id}' if option else ''}"},
             f"Record the {_inr(gap)} that the chosen option does not cover." if gap else "Clear the open gap.",
-            [a_commit])
+            [a_commit, a_budget])
 
     # 5. organisational approvals tied to affected budget lines
     for oa in db.query("SELECT * FROM org_approvals WHERE status IN ('pending','approved','on_hold')"):

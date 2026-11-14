@@ -11,6 +11,7 @@ import type {
   ScenarioId, ShortfallOption, VerifyCheck, WorldState, ActionStatus,
 } from '@/lib/types'
 import { AGENTS } from '@/lib/types'
+import { splash } from '@/lib/splash'
 
 export type DockTab = 'options' | 'plan' | 'state' | 'checks' | 'memory'
 export interface AgentCard { status: AgentStatus; note: string; at?: string }
@@ -297,10 +298,13 @@ export const useRun = create<Store>((set, get) => {
 
     async init() {
       try {
+        splash.step('Connecting to the agents', 40)
         await backend.ready()
+        splash.step(backend.kind === 'http' ? 'Loading the workspace, inbox and knowledge graph' : 'Starting the built-in simulator', 65)
         const [world, inbox, graph, facts, mem] = await Promise.all([
           backend.getState(), backend.getInbox(), backend.getGraph(), backend.getFacts(backend.profile.primarySponsor), backend.getMemory(),
         ])
+        splash.step('Almost ready', 92)
         set({ world, baseline: structuredClone(world), inbox, graph, facts, preferences: mem.preferences, episodes: mem.episodes, ready: true, error: undefined })
         if (backend.fellBack) set({ toast: { text: 'The backend at /api did not answer, so the console is running on the built-in simulator. Start the FastAPI server and reload to use it.', tone: 'wait', key: Date.now() } })
       } catch (e) {

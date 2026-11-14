@@ -48,6 +48,19 @@ def _make(oid: str, name: str, strategy: str, gap: int, red: dict[str, int], lin
                   violations=violations, score=score)
 
 
+def from_amounts(gap: int, amounts: dict[str, int], budget_lines: list[dict], org_approvals: list[dict]) -> Option:
+    """Option H: the line amounts a person typed while approving the budget step. Coverage and the
+    open gap are recomputed in code from their numbers, so everything downstream follows them."""
+    lines = {l["id"]: l for l in budget_lines}
+    red = {k: lines[k]["amount"] - v for k, v in amounts.items() if lines[k]["amount"] != v}
+    o = _make("H", "Your amounts", "Line amounts you set while approving the budget change.", gap, red, lines,
+              org_approvals)
+    o.cuts = {k: int(v) for k, v in amounts.items() if lines[k]["amount"] != v}
+    o.open_gap = max(0, o.open_gap)
+    o.coverage = min(1.0, max(0.0, o.coverage))
+    return o
+
+
 def solve(gap: int, budget_lines: list[dict], org_approvals: list[dict]) -> list[Option]:
     if gap <= 0:
         return []

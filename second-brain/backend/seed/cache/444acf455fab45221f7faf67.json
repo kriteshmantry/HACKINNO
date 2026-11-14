@@ -6,12 +6,12 @@
     "new_amount": 300000,
     "old_amount": null,
     "effective_date": null,
-    "evidence_span": "around 3L",
+    "evidence_span": "3L",
     "ambiguity_notes": [
       "probably",
       "around",
       "subject to our board's approval"
     ],
-    "self_confidence": 0.9
+    "self_confidence": 0.7
   }
 }

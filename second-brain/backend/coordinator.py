@@ -14,6 +14,7 @@ from datetime import datetime
 
 from . import approvals, config, db, negotiation, trust, verifications
 from .agents import communication, execution, knowledge, planning, verification
+from .planning import solver
 from .events import RunCtx, emit
 from .models import RunState
 
@@ -330,6 +331,8 @@ class Coordinator:
             self.transition("ESCALATED")
             self.finish("escalated: an approval expired")
             return
+        if res.edited:
+            self.adopt_edited_amounts(res.edited[0])
         for a in res.rejected:
             if a.key not in self.run.rejected_keys:
                 self.run.rejected_keys.append(a.key)
@@ -338,12 +341,29 @@ class Coordinator:
                 self.run.degraded_tools.append(a.tool)
         if res.needs_replan:
             self.run.meta["replan_reason"] = (
-                [f"{a.id} {a.tool} failed: {a.error}" for a in res.failed]
+                ["you edited the budget amounts, so everything downstream is re-planned from them" for _ in res.edited[:1]]
+                + [f"{a.id} {a.tool} failed: {a.error}" for a in res.failed]
                 + [f"{a.id} {a.tool} rejected by human" for a in res.rejected])
             self.transition("REPLAN")
         else:
             self.handoff("Execution", "Verification", "all actions completed")
             self.transition("VERIFY")
+
+    def adopt_edited_amounts(self, action) -> None:
+        """A person typed their own budget amounts into the approval: they become option H and
+        the next plan version is computed from them (gap, approvals, messages, checks)."""
+        amounts = {c["line_id"]: c["new"] for c in action.args["changes"]}
+        gap = planning.budget_gap(self.run.resolved)
+        h = solver.from_amounts(gap, amounts, db.query("SELECT * FROM budget_lines"),
+                                db.query("SELECT * FROM org_approvals"))
+        self.run.options = [o for o in self.run.options if o.id != "H"] + [h]
+        self.run.chosen_option, self.run.option_chosen_by = "H", "human (edited amounts)"
+        self.run.meta["edit_replan"] = True
+        p = self.agent("Planning")
+        p.emit("options.ready", f"Your amounts cover {h.coverage:.0%} of the ₹{gap:,} shortfall"
+               + (f", leaving ₹{h.open_gap:,} open" if h.open_gap else ""),
+               {"options": [o.model_dump() for o in self.run.options], "wait_s": 0, "gap": gap, "edited": True})
+        p.emit("options.chosen", "Option H (your amounts) chosen by you", {"option": "H", "by": "human"})
 
     async def on_verify(self) -> None:
         v = self.agent("Verification")
@@ -363,6 +383,15 @@ class Coordinator:
             self.transition("REPLAN")
 
     async def on_replan(self) -> None:
+        edited = self.run.meta.pop("edit_replan", False)
+        if edited:
+            # a person's edit is not a failure: it uses no replan budget
+            emit(self.run.id, "Coordinator", "replan", "Re-planning from your amounts: "
+                 + "; ".join(self.run.meta.get("replan_reason", [])),
+                 {"reasons": self.run.meta.get("replan_reason", []), "edited": True})
+            self.G = None
+            self.transition("PLAN")
+            return
         self.run.replans += 1
         reasons = self.run.meta.get("replan_reason", [])
         if self.run.replans > config.MAX_REPLANS:

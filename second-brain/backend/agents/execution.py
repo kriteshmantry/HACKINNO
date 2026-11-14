@@ -24,10 +24,11 @@ class ExecResult:
     blocked: list[PlannedAction] = field(default_factory=list)
     precondition: list[PlannedAction] = field(default_factory=list)
     expired: list[PlannedAction] = field(default_factory=list)
+    edited: list[PlannedAction] = field(default_factory=list)     # a person changed the budget amounts
 
     @property
     def needs_replan(self) -> bool:
-        return bool(self.failed or self.rejected or self.blocked)
+        return bool(self.failed or self.rejected or self.blocked or self.edited)
 
 
 async def execute(plan: Plan, ctx: RunCtx, on_change: Callable[[], None]) -> ExecResult:
@@ -51,6 +52,9 @@ async def execute(plan: Plan, ctx: RunCtx, on_change: Callable[[], None]) -> Exe
     async def run_one(a: PlannedAction) -> None:
         if a.status in OK:
             return
+        if any(by_id[d].status == "replaced" for d in a.depends_on if d in by_id):
+            set_status(a, "replaced", error="waits for the plan to be redone from your amounts")
+            return
         if any(by_id[d].status not in OK for d in a.depends_on if d in by_id):
             set_status(a, "blocked", error="a dependency did not complete")
             res.blocked.append(a)
@@ -72,6 +76,14 @@ async def execute(plan: Plan, ctx: RunCtx, on_change: Callable[[], None]) -> Exe
             args = dict(dec["final_args"])
             if "approval_id" in args:
                 args["approval_id"] = dec["id"]
+            if (dec["status"] == "edited" and a.tool == "budget.set_lines"
+                    and args.get("changes") != a.args.get("changes")):
+                # new numbers change the gap, approvals and messages that depend on them:
+                # do not apply them here, re-plan everything downstream from the person's amounts
+                a.args = args
+                set_status(a, "replaced", error="you edited the amounts; re-planning from them")
+                res.edited.append(a)
+                return
             a.args = args
         set_status(a, "running")
         meta: dict = {}

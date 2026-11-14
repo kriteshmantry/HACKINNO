@@ -118,7 +118,7 @@ export interface Fact {
 
 export interface OptionCut { line_id: string; category: string; from: number; to: number }
 export interface ShortfallOption {
-  id: 'A' | 'B' | 'C'
+  id: 'A' | 'B' | 'C' | 'H' // H = amounts you set while approving
   name: string
   strategy: string
   cuts: OptionCut[]
@@ -153,7 +153,7 @@ export interface PlannedAction {
 export interface Plan {
   version: number
   source: 'template' | 'llm' | 'llm-cache'
-  option: 'A' | 'B' | 'C'
+  option: 'A' | 'B' | 'C' | 'H'
   change_id: string
   rationale: string
   actions: PlannedAction[]
