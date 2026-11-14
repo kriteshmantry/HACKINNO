@@ -3,6 +3,25 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _load_dotenv(path: Path) -> None:
+    """Read KEY=VALUE lines from second-brain/.env (gitignored) without overriding the real
+    environment. Keeps the API key out of the code and out of git."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and value and not os.environ.get(key):
+            os.environ[key] = value
+
+
+_load_dotenv(BASE_DIR.parent / ".env")
+
 DATA_DIR = Path(os.getenv("SB_DATA_DIR", BASE_DIR / "data"))
 SEED_DIR = BASE_DIR / "seed"
 CACHE_DIR = SEED_DIR / "cache"

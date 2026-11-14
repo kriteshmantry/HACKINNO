@@ -34,13 +34,15 @@ Open http://localhost:8000/docs. Tests: `.venv\Scripts\python -m pytest backend/
 
 | Env var | Default | Meaning |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | unset | When set (and `SB_LLM_MODE=auto`), Claude does the extraction; responses are cached in `backend/seed/cache/` |
+| `GROQ_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | unset | Any one of them turns on LLM extraction (free tiers: Groq, Gemini). Put keys in `second-brain/.env` (gitignored; see `.env.example`). Answers are cached in `backend/seed/cache/` |
+| `SB_LLM_PROVIDER` | from the key that is set | `groq` \| `gemini` \| `anthropic` \| `ollama` (local, no key) |
+| `SB_LLM_MODEL` | per provider | Groq `openai/gpt-oss-120b`, Gemini `gemini-flash-latest`, Anthropic `SB_MODEL` |
 | `SB_LLM_MODE` | `auto` | `auto`: use the API if a key is set, otherwise the cache. `cache`: offline. `off`: rule-based only |
-| `SB_MODEL` | `claude-opus-5-5` | Model used for extraction |
+| `SB_MODEL` | `claude-opus-5-5` | Claude model, when the provider is `anthropic` |
 | `SB_OPTION_WAIT_S` | `0` | How long a run waits for a human to pick a shortfall option before taking the recommended one |
 | `SB_APPROVAL_TIMEOUT_S` | `600` | How long an approval may wait before the run escalates |
 
-Without an API key, extraction falls back to deterministic regex rules. Every scenario works offline.
+The committed cache holds real answers from Groq's `openai/gpt-oss-120b` for every message that reaches extraction, so the demo replays real LLM output offline. Refill it with `.venv\Scripts\python -m backend.warm_llm_cache` (check offline with `--check`). Every answer is re-checked in code (amount in the text, verbatim quote), and with no key and no cache, extraction falls back to deterministic regex rules.
 
 ## Demo flow (REST)
 

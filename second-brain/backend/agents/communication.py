@@ -8,7 +8,7 @@ from .. import db, llm
 from ..confidence import find_amounts, hedges_in, rule_extract
 from ..events import RunCtx
 from ..knowledge.resolve import sender_info, sponsor_mentions
-from ..models import ExtractedChange, TriageResult
+from ..models import ExtractedChange, LLMExtraction, TriageResult
 
 INJECTION = re.compile(
     r"(ignore (all |any )?(previous|prior|above) instructions|^\s*system\s*:|system prompt|"
@@ -50,23 +50,37 @@ def triage(msg: dict) -> TriageResult:
     return TriageResult(label="noise", reasons=["no sponsor commitment content"])
 
 
+def prompt_for(msg: dict) -> str:
+    return (f"<message id=\"{msg['id']}\" channel=\"{msg['channel']}\" from=\"{msg['sender']}\" "
+            f"received=\"{msg['received_at']}\">\n{msg['body']}\n</message>")
+
+
 def extract(msg: dict, ctx: RunCtx) -> ExtractedChange:
     mentions = sponsor_mentions(msg["body"])
     mention = mentions[0][0] if mentions else ""
-    user = (f"<message id=\"{msg['id']}\" channel=\"{msg['channel']}\" from=\"{msg['sender']}\" "
-            f"received=\"{msg['received_at']}\">\n{msg['body']}\n</message>")
+    r_new, r_old, r_span = rule_extract(msg["body"])
     try:
-        out, source = llm.call_structured("communication", SYSTEM, user, ExtractedChange, effort="low")
-        out.evidence_message_id, out.source = msg["id"], source
-        out.sponsor_mention = out.sponsor_mention or mention
-        ctx.emit("llm.call", f"Extraction via {source}", {"source": source, "schema": "ExtractedChange"})
-        return out
+        out, source, model = llm.call_structured("communication", SYSTEM, prompt_for(msg), LLMExtraction,
+                                                 effort="low")
     except llm.LLMUnavailable as e:
         ctx.emit("llm.fallback", f"LLM unavailable ({e}); using rule-based extraction", {"reason": str(e)})
-    new, old, span = rule_extract(msg["body"])
-    return ExtractedChange(sponsor_mention=mention, new_amount=new, old_amount=old,
-                           ambiguity_notes=[f"hedge: '{h}'" for h in hedges_in(msg["body"])],
-                           evidence_span=span, evidence_message_id=msg["id"], source="rules")
+        return ExtractedChange(sponsor_mention=mention, new_amount=r_new, old_amount=r_old,
+                               ambiguity_notes=[f"hedge: '{h}'" for h in hedges_in(msg["body"])],
+                               evidence_span=r_span, evidence_message_id=msg["id"], source="rules")
+    # The model's quote must be a verbatim substring, or the evidence highlight would point at nothing.
+    span_ok = bool(out.evidence_span) and out.evidence_span in msg["body"]
+    agree = {"new_amount": out.new_amount == r_new, "old_amount": out.old_amount == r_old}
+    ctx.emit("llm.call", f"{model} read the message ({source}): new {out.new_amount}, old {out.old_amount}"
+             + ("" if agree["new_amount"] else f"; rules read {r_new}")
+             + ("" if span_ok else "; quote not verbatim, using the rule span"),
+             {"source": source, "schema": "LLMExtraction", "model": model, "rules_agree": agree,
+              "span_verbatim": span_ok, "self_confidence": out.self_confidence,
+              "rules": {"new_amount": r_new, "old_amount": r_old}})
+    return ExtractedChange(
+        sponsor_mention=out.sponsor_mention or mention, new_amount=out.new_amount, old_amount=out.old_amount,
+        effective_date=out.effective_date, ambiguity_notes=out.ambiguity_notes,
+        evidence_span=out.evidence_span if span_ok else r_span, evidence_message_id=msg["id"],
+        llm_confidence=out.self_confidence, source=source)
 
 
 def get_message(message_id: str) -> dict | None:

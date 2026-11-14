@@ -1,0 +1,13 @@
+{
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "answer": {
+    "sponsor_mention": "TN",
+    "new_amount": 350000,
+    "old_amount": null,
+    "effective_date": null,
+    "evidence_span": "3.5L",
+    "ambiguity_notes": [],
+    "self_confidence": 0.98
+  }
+}

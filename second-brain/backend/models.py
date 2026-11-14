@@ -11,6 +11,24 @@ class TriageResult(BaseModel):
     reasons: list[str] = []
 
 
+class LLMExtraction(BaseModel):
+    """Exactly what Claude is asked to report about one message. Ids, the source label and every
+    score are set in code; amounts it reports are re-checked against the text before use."""
+    sponsor_mention: str = Field(description="The sponsor exactly as written in the message, e.g. 'TechNova' or 'TN'. "
+                                             "Empty string if no sponsor is named.")
+    new_amount: int | None = Field(description="The newly committed amount in rupees as an integer "
+                                               "(₹3,00,000 -> 300000, 3L or 3 lakh -> 300000, 3.5L -> 350000). "
+                                               "Null if the message states no new amount.")
+    old_amount: int | None = Field(description="The previous amount in rupees if the message itself states it, else null.")
+    effective_date: str | None = Field(description="Date the change takes effect if stated (YYYY-MM-DD), else null.")
+    evidence_span: str = Field(description="The shortest exact substring of the message, copied character for character, "
+                                           "that states the new amount. Empty string if there is none.")
+    ambiguity_notes: list[str] = Field(description="Each word or phrase that makes the amount uncertain or not final, "
+                                                   "e.g. 'probably', 'around', 'subject to board approval'. Empty if none.")
+    self_confidence: float = Field(description="Your own confidence from 0 to 1 that new_amount is the final, committed "
+                                               "amount. Logged for comparison only.")
+
+
 class ExtractedChange(BaseModel):
     """What the Communication agent read out of one message (LLM or regex)."""
     sponsor_mention: str

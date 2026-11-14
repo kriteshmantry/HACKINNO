@@ -1,0 +1,15 @@
+{
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "answer": {
+    "sponsor_mention": "TechNova",
+    "new_amount": 300000,
+    "old_amount": 500000,
+    "effective_date": null,
+    "evidence_span": "₹3,00,000",
+    "ambiguity_notes": [
+      "can commit"
+    ],
+    "self_confidence": 0.99
+  }
+}
