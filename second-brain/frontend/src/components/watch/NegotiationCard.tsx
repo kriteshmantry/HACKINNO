@@ -21,13 +21,13 @@ export function NegotiationCard() {
   const rec = n.record
   const sent = rec?.status === 'sent'
   return (
-    <section id="negotiation" aria-label="Counter-offer" className="scroll-mt-20 rounded-md border border-work/50 bg-surface px-4 py-4">
+    <section id="negotiation" aria-label="Counter-offer" className="rise scroll-mt-20 rounded-md border border-work/50 bg-surface px-4 py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="text-[12px] font-bold uppercase tracking-[0.04em] text-work">Win it back</p>
           <h3 className="text-[19px] font-extrabold tracking-[-0.02em]">{n.headline}</h3>
         </div>
-        {rec && <span className={clsx('rounded-xs px-1.5 text-[11.5px] font-bold leading-5',
+        {rec && <span key={rec.status} className={clsx('pop rounded-xs px-1.5 text-[11.5px] font-bold leading-5',
           rec.status === 'sent' ? 'bg-wait-soft text-wait' : rec.status === 'accepted' ? 'bg-ok-soft text-ok' : 'bg-surface-2 text-muted')}>
           {rec.status === 'sent' ? 'Sent, waiting' : rec.status === 'accepted' ? 'Accepted' : 'Declined'}
         </span>}
@@ -38,8 +38,8 @@ export function NegotiationCard() {
       </p>
 
       <ul className="mt-3 grid gap-2 md:grid-cols-3">
-        {n.offers.map((o) => (
-          <li key={o.id} className={clsx('rounded-sm border px-3 py-2.5', o.id === 'restore' ? 'border-text/40' : 'border-line')}>
+        {n.offers.map((o, i) => (
+          <li key={o.id} style={{ animationDelay: `${150 + i * 90}ms` }} className={clsx('rise lift rounded-sm border px-3 py-2.5', o.id === 'restore' ? 'border-text/40' : 'border-line')}>
             <p className="text-[13.5px] font-bold">{o.title}</p>
             <p className="tnum mt-0.5 text-[12.5px]">{o.add ? <>Add <span className="font-semibold">{rupees(o.add)}</span>, {rupees(o.total)} in total</> : <>No change, {rupees(o.total)}</>}</p>
             {o.gets.length > 0 && <p className="mt-1 text-[12px] text-ok">Gets {o.gets.join(', ')}</p>}

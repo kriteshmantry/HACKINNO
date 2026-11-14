@@ -34,7 +34,7 @@ export function VerificationInline({ id }: { id: string }) {
   const decided = !['pending', 'awaiting_reply'].includes(v.status)
 
   return (
-    <div className="mt-3 rounded-sm border border-wait/50 bg-wait-soft px-3.5 py-3">
+    <div className="rise mt-3 rounded-sm border border-wait/50 bg-wait-soft px-3.5 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-[14.5px] font-bold">{v.question}</p>
         <Mono className="text-faint">{v.id}</Mono>
@@ -55,7 +55,7 @@ export function VerificationInline({ id }: { id: string }) {
       )}
 
       {v.status === 'awaiting_reply' && v.outreach && (
-        <div className="mt-3 rounded-sm border border-line bg-surface px-3 py-2.5">
+        <div className="rise mt-3 rounded-sm border border-line bg-surface px-3 py-2.5">
           <p className="text-[13px]"><span className="font-semibold">Asked {v.outreach.to}</span> <span className="text-muted">(the contact on file). The run keeps waiting for their answer.</span></p>
           <p className="mt-2 text-[12px] font-semibold text-muted">Demo: play the contact’s reply</p>
           <div className="mt-1 flex flex-wrap gap-2">

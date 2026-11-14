@@ -1,17 +1,60 @@
 import clsx from 'clsx'
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import type { ActionStatus, AgentId, AgentStatus, NodeKind, Severity } from '@/lib/types'
 import { useTheme } from '@/lib/theme'
 
 /* ------------------------------------------------------------------ */
 /* Buttons: ink-on-paper primary, bordered secondary, quiet ghost.     */
 /* ------------------------------------------------------------------ */
-export function Button({ variant = 'quiet', size = 'md', className, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'quiet' | 'ghost' | 'danger'; size?: 'sm' | 'md' }) {
+/** The loading bar that runs along the bottom edge of the button you clicked. */
+export function LoadBar() {
+  return <span className="btn-load" aria-hidden />
+}
+
+/**
+ * Wraps a click handler: when it returns a promise, the button shows a loading bar inside
+ * itself and ignores further clicks until the work finishes (shown for at least 350 ms so a
+ * fast reply still reads as feedback).
+ */
+export function useAsyncClick<E>(handler?: (e: E) => unknown) {
+  const [pending, setPending] = useState(false)
+  const alive = useRef(true)
+  useEffect(() => () => { alive.current = false }, [])
+  const onClick = (e: E) => {
+    if (pending || !handler) return
+    const r = handler(e)
+    if (r && typeof (r as Promise<unknown>).then === 'function') {
+      setPending(true)
+      const started = Date.now()
+      ;(r as Promise<unknown>).finally(() => {
+        const wait = Math.max(0, 350 - (Date.now() - started))
+        setTimeout(() => { if (alive.current) setPending(false) }, wait)
+      })
+    }
+  }
+  return { pending, onClick }
+}
+
+type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & {
+  variant?: 'primary' | 'quiet' | 'ghost' | 'danger'
+  size?: 'sm' | 'md'
+  /** may return a promise: the button then shows its own loading bar until it settles */
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => unknown
+  loading?: boolean
+}
+
+export function Button({ variant = 'quiet', size = 'md', className, onClick, loading, disabled, children, ...p }: ButtonProps) {
+  const click = useAsyncClick(onClick)
+  const busy = loading || click.pending
   return (
     <button
       {...p}
+      onClick={click.onClick}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       className={clsx(
-        'inline-flex items-center justify-center gap-1.5 rounded-sm font-semibold transition-colors disabled:opacity-40 whitespace-nowrap',
+        'relative overflow-hidden inline-flex items-center justify-center gap-1.5 rounded-sm font-semibold transition-[color,background-color,border-color,transform] active:scale-[0.97] disabled:opacity-40 whitespace-nowrap',
+        busy && '!opacity-90 !cursor-progress',
         size === 'sm' ? 'h-7 px-2.5 text-[12.5px]' : 'h-9 px-3.5 text-[13.5px]',
         variant === 'primary' && 'bg-text text-bg hover:bg-text/85',
         variant === 'quiet' && 'border border-line bg-surface text-text hover:border-text/40',
@@ -19,8 +62,34 @@ export function Button({ variant = 'quiet', size = 'md', className, ...p }: Butt
         variant === 'danger' && 'border border-fail/50 text-fail hover:bg-fail-soft',
         className,
       )}
-    />
+    >
+      {children}
+      {busy && <LoadBar />}
+    </button>
   )
+}
+
+/** Counts a number up to its new value (scores, amounts) instead of jumping. */
+export function useCountUp(value: number, ms = 700) {
+  const [shown, setShown] = useState(value)
+  const from = useRef(value)
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const start = from.current
+    if (reduce || start === value) { from.current = value; setShown(value); return }
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - t0) / ms)
+      const eased = 1 - Math.pow(1 - k, 3)
+      setShown(start + (value - start) * eased)
+      if (k < 1) raf = requestAnimationFrame(tick)
+      else from.current = value
+    }
+    raf = requestAnimationFrame(tick)
+    return () => { cancelAnimationFrame(raf); from.current = value }
+  }, [value, ms])
+  return shown
 }
 
 export type Tone = 'work' | 'wait' | 'fail' | 'ok' | 'note' | 'muted'

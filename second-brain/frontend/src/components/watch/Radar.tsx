@@ -31,10 +31,10 @@ export function RadarRail() {
             {open.length ? <>{radar.counts.high > 0 && <span className="font-semibold text-fail">{radar.counts.high} urgent</span>}{radar.counts.high > 0 && radar.counts.medium > 0 && ', '}{radar.counts.medium > 0 && <span className="font-semibold text-wait">{radar.counts.medium} soon</span>}. No email needed: it reads the live records.</> : 'Nothing at risk in the next two weeks.'}
           </p>
           <ul className="mt-2 space-y-1.5">
-            {open.slice(0, 4).map((i) => (
-              <li key={i.id}>
+            {open.slice(0, 4).map((i, k) => (
+              <li key={i.id} className="slide-in" style={{ animationDelay: `${k * 60}ms` }}>
                 <button onClick={() => useWatch.getState().open('radar')} className="grid w-full grid-cols-[8px_1fr] gap-2 text-left">
-                  <span className="mt-[6px] h-2 w-2 rounded-full" style={{ background: `var(--${SEV_COLOR[i.severity]})` }} />
+                  <span className={clsx('mt-[6px] h-2 w-2 rounded-full', i.severity === 'high' && 'working')} style={{ background: `var(--${SEV_COLOR[i.severity]})` }} />
                   <span className="min-w-0">
                     <span className="block text-[12.5px] font-semibold leading-snug">{i.title}</span>
                     {when(i) && <span className="block text-[11.5px] text-faint">Due {when(i)}</span>}
@@ -92,11 +92,11 @@ export function RadarList() {
     <div>
       <p className="text-[12.5px] text-muted">Scanned at the scenario clock ({radar.now.slice(0, 10)}), looking {radar.horizon_days} days ahead. Each item names the records it read.</p>
       <ul className="mt-3 space-y-2.5">
-        {radar.items.map((i) => (
-          <li key={i.id} className={clsx('rounded-sm border px-3 py-2.5', i.handled ? 'border-line-soft opacity-70' : i.severity === 'high' ? 'border-fail/50' : 'border-line')}>
+        {radar.items.map((i, k) => (
+          <li key={i.id} style={{ animationDelay: `${k * 55}ms` }} className={clsx('rise rounded-sm border px-3 py-2.5 transition-opacity', i.handled ? 'border-line-soft opacity-70' : i.severity === 'high' ? 'border-fail/50' : 'border-line')}>
             <div className="flex items-start justify-between gap-2">
               <p className="text-[13.5px] font-bold leading-snug">{i.title}</p>
-              <span className={clsx('shrink-0 rounded-xs px-1.5 text-[11px] font-bold leading-5', i.handled ? 'bg-ok-soft text-ok' : `bg-${SEV_COLOR[i.severity]}-soft text-${SEV_COLOR[i.severity]}`)}>
+              <span key={i.handled ? 'done' : i.severity} className={clsx('pop shrink-0 rounded-xs px-1.5 text-[11px] font-bold leading-5', i.handled ? 'bg-ok-soft text-ok' : `bg-${SEV_COLOR[i.severity]}-soft text-${SEV_COLOR[i.severity]}`)}>
                 {i.handled ? i.handled.what : SEV_WORD[i.severity]}
               </span>
             </div>

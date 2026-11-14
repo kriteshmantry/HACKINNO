@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { useCountUp } from '../ui'
 import type { Confidence, TrustSignal } from '@/lib/types'
 import type { TrustRow } from '@/backend/http/extras'
 import { scoreTone, useWatch } from '@/store/watchStore'
@@ -10,7 +11,7 @@ export function SignalList({ items, base = true }: { items: { delta: number; lab
     <ul className="tnum space-y-0.5 text-[12.5px]">
       {base && <li className="flex justify-between gap-4 text-faint"><span>Starting point</span><span>0.50</span></li>}
       {items.map((r, i) => (
-        <li key={r.label + i} className="flex justify-between gap-4">
+        <li key={r.label + i} className="slide-in flex justify-between gap-4" style={{ animationDelay: `${i * 45}ms` }}>
           <span className="min-w-0 text-muted [overflow-wrap:anywhere]">{r.label}</span>
           <span className={clsx('shrink-0 font-semibold', r.delta > 0 ? 'text-ok' : r.delta < 0 ? 'text-fail' : 'text-faint')}>{sign(r.delta)}</span>
         </li>
@@ -22,7 +23,7 @@ export function SignalList({ items, base = true }: { items: { delta: number; lab
 function Bar({ x, tone }: { x: number; tone: string }) {
   return (
     <span className="relative block h-1.5 w-full rounded-full bg-surface-2" aria-hidden>
-      <span className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500" style={{ width: `${Math.max(2, x * 100)}%`, background: `var(--${tone})` }} />
+      <span className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out" style={{ width: `${Math.max(2, x * 100)}%`, background: `var(--${tone})` }} />
     </span>
   )
 }
@@ -31,14 +32,14 @@ function Part({ title, hint, score, decides, items }: { title: string; hint: str
   const policy = useWatch((s) => s.policy)
   const tone = scoreTone(score, policy)
   return (
-    <section className={clsx('rounded-sm border px-3 py-2.5', decides ? 'border-text/40 bg-surface' : 'border-line-soft')}>
+    <section className={clsx('rise rounded-sm border px-3 py-2.5', decides ? 'border-text/40 bg-surface' : 'border-line-soft')}>
       <div className="flex items-baseline justify-between gap-2">
         <h4 className="text-[13px] font-bold">{title}</h4>
         {decides && <span className="rounded-xs bg-surface-2 px-1.5 text-[11px] font-bold leading-5 text-muted">This one decides</span>}
       </div>
       <p className="text-[11.5px] text-faint">{hint}</p>
       <div className="mt-1.5 flex items-center gap-2.5">
-        <span className="tnum w-10 text-[17px] font-bold" style={{ color: `var(--${tone})` }}>{score.toFixed(2)}</span>
+        <span className="tnum w-10 text-[17px] font-bold" style={{ color: `var(--${tone})` }}>{useCountUp(score).toFixed(2)}</span>
         <Bar x={score} tone={tone} />
       </div>
       <div className="mt-2"><SignalList items={items} /></div>

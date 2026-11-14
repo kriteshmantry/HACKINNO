@@ -72,8 +72,8 @@ export function TrustPanel() {
         <h3 className="text-[13.5px] font-bold">Verification queue</h3>
         {queue.length === 0 ? <p className="text-[12.5px] text-muted">Nothing has been held yet. Try S2 (a vague email) or S5 (an impostor).</p> : (
           <ul className="mt-1.5 space-y-1.5">
-            {queue.map((v) => (
-              <li key={v.id} className="rounded-sm border border-line px-3 py-2">
+            {queue.map((v, i) => (
+              <li key={v.id} style={{ animationDelay: `${i * 50}ms` }} className="rise rounded-sm border border-line px-3 py-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[13px] font-semibold">{v.question}</span>
                   <span className={clsx('shrink-0 text-[11.5px] font-bold', v.status === 'pending' ? 'text-wait' : v.status === 'rejected' ? 'text-fail' : v.status === 'awaiting_reply' ? 'text-work' : 'text-ok')}>{STATUS[v.status]}</span>
@@ -92,8 +92,8 @@ export function TrustPanel() {
         <h3 className="text-[13.5px] font-bold">Every message that claims a change</h3>
         <p className="text-[12px] text-muted">Scored before any run starts. Weakest first; hover a badge for the reasons.</p>
         <ul className="mt-1.5 divide-y divide-line-soft">
-          {rows.map((r) => (
-            <li key={r.message_id} className="grid grid-cols-[1fr_auto] items-start gap-2 py-1.5">
+          {rows.map((r, i) => (
+            <li key={r.message_id} style={{ animationDelay: `${i * 40}ms` }} className="slide-in grid grid-cols-[1fr_auto] items-start gap-2 py-1.5">
               <span className="min-w-0">
                 <span className="block truncate text-[12.5px] font-semibold"><Mono className="mr-1 text-faint">{r.message_id}</Mono>{from(r.message_id) ?? r.sender}</span>
                 <span className="block text-[11.5px] text-muted">{r.route}</span>

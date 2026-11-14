@@ -172,3 +172,34 @@ mark.evidence {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 }
+
+/* ---------- loading bar inside the button that was clicked ---------- */
+@keyframes btn-load { from { transform: translateX(-110%); } to { transform: translateX(270%); } }
+.btn-load { position: absolute; left: 0; right: 0; bottom: 0; height: 2.5px; overflow: hidden; pointer-events: none; }
+.btn-load::after { content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0.16; }
+.btn-load::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 38%;
+  background: currentColor; border-radius: 2px; opacity: 0.85;
+  animation: btn-load 0.95s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+/* ---------- entrances: content slides up into place ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 460ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.slide-in { animation: slide-in 360ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+/* a status tag or count changing: a small pop so the eye catches it */
+@keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+.pop { animation: pop 380ms cubic-bezier(0.2, 0.7, 0.2, 1) both; display: inline-block; }
+/* cards you can pick lift slightly under the pointer */
+.lift { transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease; }
+.lift:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+/* "Needs you": a soft ring pulses around the step number */
+@keyframes needs-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wait) 55%, transparent); }
+  100% { box-shadow: 0 0 0 9px transparent; }
+}
+.needs-ring { animation: needs-ring 1.5s ease-out infinite; }
+/* a finished step: its number flips to the check colour */
+@keyframes done-flash { 0% { transform: scale(0.7); } 55% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.done-flash { animation: done-flash 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both; }

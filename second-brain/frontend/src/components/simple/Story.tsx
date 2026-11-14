@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { backend } from '@/backend'
 import { useRun } from '@/store/runStore'
 import type { Approval, PlannedAction, ScenarioId, WorldState } from '@/lib/types'
 import { lakhs, rupees } from '@/lib/format'
 import type { AgentId, NodeKind } from '@/lib/types'
-import { Button, kindLabel, Mono, Spinner, severityColor, statusLabel, statusTone } from '../ui'
+import { Button, kindLabel, LoadBar, Mono, Spinner, severityColor, statusLabel, statusTone, useAsyncClick, useCountUp } from '../ui'
 import { STAGES, useStages, type StageId, type StageStatus } from './status'
 import { TrustMeter } from '../watch/TrustParts'
 import { VerificationInline } from '../watch/VerificationInline'
@@ -33,31 +34,37 @@ function Stage({ n, id, title, idle, status, summary, agents, children }: { n: n
   useEffect(() => { setOverride(undefined) }, [status])
   const tag = TAG[status]
   return (
-    <li id={`stage-${id}`} className={clsx('scroll-mt-20 rounded-md border transition-colors',
+    <li id={`stage-${id}`} style={{ animationDelay: `${(n - 1) * 70}ms` }} className={clsx('rise scroll-mt-20 rounded-md border transition-[border-color,background-color,box-shadow] duration-300',
       status === 'needs' ? 'border-wait bg-surface' : status === 'active' ? 'border-text/50 bg-surface' : status === 'stopped' ? 'border-fail bg-surface'
         : status === 'upcoming' || status === 'skipped' ? 'border-line-soft' : 'border-line bg-surface')}>
       <button disabled={!canOpen} onClick={() => setOverride(!open)} aria-expanded={canOpen ? open : undefined}
         className="flex w-full items-start gap-3 px-4 py-3.5 text-left disabled:cursor-default">
-        <span className={clsx('mt-px grid h-6 w-6 shrink-0 place-items-center rounded-sm text-[12px] font-bold',
+        <span key={status} className={clsx('mt-px grid h-6 w-6 shrink-0 place-items-center rounded-sm text-[12px] font-bold transition-colors',
+          status === 'needs' && 'needs-ring', status === 'done' && 'done-flash',
           status === 'done' ? 'bg-ok text-bg' : status === 'needs' ? 'bg-wait text-bg' : status === 'active' ? 'bg-text text-bg' : status === 'stopped' ? 'bg-fail text-bg' : 'bg-surface-2 text-faint')}>
           {status === 'active' ? <Spinner /> : n}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className={clsx('text-[15px] font-bold tracking-[-0.01em]', (status === 'upcoming' || status === 'skipped') && 'text-muted')}>{title}</span>
-            {tag && <span className={clsx('rounded-xs px-1.5 text-[11.5px] font-bold leading-5', tag.cls)}>{tag.text}</span>}
+            {tag && <span key={status} className={clsx('pop rounded-xs px-1.5 text-[11.5px] font-bold leading-5', tag.cls)}>{tag.text}</span>}
             <span className="text-[12px] text-faint">by the {agents.join(' and ')} agent{agents.length > 1 ? 's' : ''}</span>
           </span>
           <span className="mt-0.5 block text-[13px] text-muted">{status === 'upcoming' ? idle : status === 'skipped' ? 'Not needed for this message.' : summary}</span>
         </span>
         {canOpen && <span className="mt-1 shrink-0 text-[12px] font-semibold text-work">{open ? 'Hide' : 'Details'}</span>}
       </button>
-      {open && canOpen && (
-        <div className="border-t border-line-soft px-4 py-4">
-          {children}
-          <ContextLinks agents={agents} />
-        </div>
-      )}
+      <AnimatePresence initial={false}>
+        {open && canOpen && (
+          <motion.div key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.2, 0.7, 0.2, 1] }} className="overflow-hidden">
+            <div className="border-t border-line-soft px-4 py-4">
+              {children}
+              <ContextLinks agents={agents} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </li>
   )
 }
@@ -230,9 +237,9 @@ function ReadStage() {
         {confidence && (
           <Fact label="How sure">
             <span className="flex items-center gap-3">
-              <span className="text-[18px] font-bold" style={{ color: `var(--${confidence.band === 'autonomous' ? 'ok' : confidence.band === 'supervised' ? 'wait' : 'fail'})` }}>{confidence.score.toFixed(2)}</span>
+              <Score value={confidence.score} className="tnum text-[18px] font-bold" style={{ color: `var(--${confidence.band === 'autonomous' ? 'ok' : confidence.band === 'supervised' ? 'wait' : 'fail'})` }} />
               <span className="relative h-1.5 w-40 rounded-full bg-surface-2" aria-hidden>
-                <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${confidence.score * 100}%`, background: `var(--${confidence.band === 'autonomous' ? 'ok' : confidence.band === 'supervised' ? 'wait' : 'fail'})` }} />
+                <span className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out" style={{ width: `${confidence.score * 100}%`, background: `var(--${confidence.band === 'autonomous' ? 'ok' : confidence.band === 'supervised' ? 'wait' : 'fail'})` }} />
               </span>
             </span>
             <span className="block text-muted">{BAND_TEXT[confidence.band]}</span>
@@ -351,18 +358,18 @@ function DecideStage() {
   return (
     <div>
       <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
-        <p className="text-[22px] font-extrabold tracking-[-0.02em]">{computed.shortfall > 0 ? <>Short by <span className="text-fail">{rupees(computed.shortfall)}</span></> : 'No money is missing'}</p>
+        <p className="text-[22px] font-extrabold tracking-[-0.02em]">{computed.shortfall > 0 ? <>Short by <span className="tnum text-fail"><Rupees value={computed.shortfall} /></span></> : 'No money is missing'}</p>
         <p className="text-[13px] text-muted">Tier {computed.old_tier === computed.new_tier ? <>stays {computed.new_tier}</> : <><span className="was">{computed.old_tier}</span> {computed.new_tier}</>}{computed.deliverable_diff.length ? `: ${computed.deliverable_diff.map((d) => d.charAt(0).toLowerCase() + d.slice(1)).join(', ')}` : ''}</p>
       </div>
       <p className="mt-1 text-[12.5px] text-muted">Every number here is computed in code, not by a language model.</p>
 
       {options.length > 0 && (
         <ul className="mt-3 space-y-2" aria-label="Ways to cover the gap">
-          {options.map((o) => {
+          {options.map((o, oi) => {
             const isChosen = chosen === o.id
             const isRec = recommended === o.id
             return (
-              <li key={o.id} className={clsx('rounded-sm border px-3 py-2.5', isChosen ? 'border-ok bg-ok-soft' : isRec && !chosen ? 'border-text/40' : 'border-line', chosen && !isChosen && 'opacity-55')}>
+              <li key={o.id} style={{ animationDelay: `${oi * 80}ms` }} className={clsx('rise lift rounded-sm border px-3 py-2.5', isChosen ? 'border-ok bg-ok-soft' : isRec && !chosen ? 'border-text/40' : 'border-line', chosen && !isChosen && 'opacity-55')}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[14px] font-bold">{o.id}. {o.name} {isRec && <span className="ml-1 text-[12px] font-semibold text-work">recommended</span>}</p>
@@ -415,10 +422,10 @@ function ChangeRow({ a }: { a: PlannedAction }) {
   const ap = useRun((s) => Object.values(s.approvals).find((x) => x.action_id === a.id && x.status === 'pending'))
   const tone = statusTone[status]
   return (
-    <li className="py-2">
+    <li className="slide-in py-2">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex w-[112px] shrink-0 items-center gap-1.5 text-[12px] font-semibold" style={{ color: `var(--${tone === 'muted' ? 'faint' : tone})` }}>
-          {(status === 'running' || status === 'retrying') && <Spinner />}{statusLabel[status]}
+          {(status === 'running' || status === 'retrying') && <Spinner />}<span key={status} className="pop">{statusLabel[status]}</span>
         </span>
         <span className={clsx('min-w-0 flex-1 text-[13.5px]', ['replaced', 'superseded', 'rejected'].includes(status) && 'was')}>{a.title}</span>
         <button onClick={() => useRun.getState().set('traceAction', a.id)} className="shrink-0 text-[12px] font-semibold text-work hover:underline" aria-label={`Why: ${a.title}`}>Why?</button>
@@ -589,23 +596,42 @@ function StartFailed({ id, message }: { id: ScenarioId; message: string }) {
   )
 }
 
+/** A scenario to start: lifts under the pointer, shows a loading bar inside itself once clicked. */
+function ScenarioCard({ id, i }: { id: ScenarioId; i: number }) {
+  const sc = backend.profile.scenarios[id]!
+  const click = useAsyncClick(() => useRun.getState().start(id))
+  return (
+    <li className="rise" style={{ animationDelay: `${120 + i * 60}ms` }}>
+      <button onClick={click.onClick} disabled={click.pending} aria-busy={click.pending || undefined}
+        className="lift relative h-full w-full overflow-hidden rounded-sm border border-line bg-surface px-3 py-2.5 text-left hover:border-text/40 disabled:cursor-progress">
+        <span className="block text-[14px] font-bold">{id}: {sc.name}{id === 'S1' && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
+        <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{click.pending ? 'Starting…' : sc.hint}</span>
+        {click.pending && <span className="text-work"><LoadBar /></span>}
+      </button>
+    </li>
+  )
+}
+
+/** A 0..1 score that counts up to its value. */
+function Score({ value, className, style }: { value: number; className?: string; style?: React.CSSProperties }) {
+  return <span className={className} style={style}>{useCountUp(value).toFixed(2)}</span>
+}
+
+/** A rupee amount that counts up to its value. */
+function Rupees({ value }: { value: number }) {
+  return <>{rupees(Math.round(useCountUp(value, 900)))}</>
+}
+
 function Welcome() {
   const { profile } = backend
   return (
-    <section className="rounded-md border border-line bg-surface px-5 py-5">
+    <section className="rise rounded-md border border-line bg-surface px-5 py-5">
       <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">Watch one sponsor email ripple through {profile.eventName}</h2>
       <p className="mt-1 max-w-[46rem] text-[14px] leading-relaxed text-muted">
         TechNova is a Gold sponsor at ₹5,00,000 and the budget balances at ₹13L. Pick a scenario: the agents read the message, trace what it affects, ask you to decide anything risky, make the changes and check the result. Each step appears below as it happens.
       </p>
       <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-        {(Object.keys(profile.scenarios) as ScenarioId[]).map((id) => (
-          <li key={id}>
-            <button onClick={() => useRun.getState().start(id)} className="h-full w-full rounded-sm border border-line px-3 py-2.5 text-left hover:border-text/40">
-              <span className="block text-[14px] font-bold">{id}: {profile.scenarios[id]!.name}{id === 'S1' && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
-              <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{profile.scenarios[id]!.hint}</span>
-            </button>
-          </li>
-        ))}
+        {(Object.keys(profile.scenarios) as ScenarioId[]).map((id, i) => <ScenarioCard key={id} id={id} i={i} />)}
       </ul>
     </section>
   )

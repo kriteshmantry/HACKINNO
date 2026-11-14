@@ -33,11 +33,11 @@ export function WatchButtons() {
     <>
       <button className={cls} onClick={() => useWatch.getState().open('radar')} aria-label={`Risk radar, ${urgent} urgent`}>
         <span className="hidden sm:inline">Radar</span><span className="sm:hidden">Risk</span>
-        {urgent > 0 && <span className="tnum rounded-xs bg-fail px-1 text-[11px] leading-4 text-bg">{urgent}</span>}
+        {urgent > 0 && <span key={urgent} className="pop tnum rounded-xs bg-fail px-1 text-[11px] leading-4 text-bg">{urgent}</span>}
       </button>
       <button className={cls} onClick={() => useWatch.getState().open('trust')} aria-label={`Email trust, ${open} waiting`}>
         Trust
-        {open > 0 && <span className="tnum rounded-xs bg-wait px-1 text-[11px] leading-4 text-bg">{open}</span>}
+        {open > 0 && <span key={open} className="pop tnum rounded-xs bg-wait px-1 text-[11px] leading-4 text-bg">{open}</span>}
       </button>
     </>
   )

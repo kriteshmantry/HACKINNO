@@ -126,7 +126,7 @@ export function SideRail() {
         {feed.length ? (
           <ol className="mt-2 space-y-1.5">
             {feed.map((e) => (
-              <li key={e.id} className="grid grid-cols-[34px_1fr] gap-2 text-[12.5px] leading-snug">
+              <li key={e.id} className="slide-in grid grid-cols-[34px_1fr] gap-2 text-[12.5px] leading-snug">
                 <span className="tnum pt-px text-[11px] text-faint">{rel(e.ts)}</span>
                 <span className={clsx(tone(e) !== 'faint' && `text-${tone(e)}`)}>{say(e)}</span>
               </li>
