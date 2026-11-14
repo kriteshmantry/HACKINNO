@@ -376,7 +376,8 @@ export class EventTranslator {
       }
       case 'confidence': {
         this.band = p.band
-        push('confidence', e.message, { confidence: { score: p.score, band: p.band, reasons: parseReasons(p.reasons ?? []), llm_self_reported: this.llmConfidence } })
+        push('confidence', e.message, { confidence: { score: p.score, band: p.band, reasons: parseReasons(p.reasons ?? []), llm_self_reported: this.llmConfidence,
+          certainty: p.certainty ?? undefined, trust: p.trust ?? undefined, gated_by: p.gated_by, trust_signals: p.trust_signals ?? [] } })
         break
       }
       case 'memory.contradiction':
@@ -462,6 +463,7 @@ export class EventTranslator {
             reasons: (p.reasons ?? []).filter((r: string) => !/base$/.test(r))
               .map((r: string) => r.replace(/^([+-]?\d\.\d+)\s+(.*)$/, (_m: string, d: string, t: string) => `${t.replace(/^\w/, (c) => c.toUpperCase())} (${d.startsWith('-') ? '−' + d.slice(1) : d.startsWith('+') ? d : '+' + d})`)),
             draft: p.draft,
+            verification_id: p.verification_id, recommended: p.recommended, low_trust: p.low_trust, contact: p.contact,
           },
         })
         break
@@ -473,6 +475,8 @@ export class EventTranslator {
         if (p.state === 'QUARANTINED') push('run.quarantined', 'Quarantined at triage. No agent planned anything and nothing was changed', { message_id: this.msgId })
         else if (p.state === 'ESCALATED') push('run.escalated', `Handed to a person: ${outcome.replace(/^escalated:\s*/, '')}`, { reason: outcome, done: [], not_done: this.checks.filter((c) => !c.pass).map((c) => `${c.id} ${c.label} (found ${c.actual})`) })
         else if (p.state === 'IGNORED') push('run.waiting', 'Ignored: not a sponsor commitment change. Nothing was changed', {})
+        else if (/impersonation/.test(outcome)) push('run.waiting', 'Stopped: the contact on file says they never sent it (likely impersonation). Nothing was changed', {})
+        else if (/not genuine/.test(outcome)) push('run.waiting', 'Stopped: you marked the message as not genuine. Nothing was changed', {})
         else if (/^dismissed/.test(outcome)) push('run.waiting', 'Dismissed by a person. Nothing was changed', {})
         else if (/^no change/.test(outcome)) push('run.done', 'Nothing to do: the workspace already reflects this commitment', { summary: 'Re-processing the same message applied nothing twice.' })
         else {
@@ -482,6 +486,8 @@ export class EventTranslator {
         }
         break
       }
+      case 'trust.scored': case 'negotiation.available': case 'verification.outreach': case 'outreach.sent':
+        push(e.type, e.message, p); break
       case 'run.error': push('run.escalated', `Escalated after an internal error: ${e.message}`, { reason: e.message, done: [], not_done: [] }); break
       default: push('log', e.message, p)
     }

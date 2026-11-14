@@ -10,6 +10,8 @@ import { Panels, SideRail } from '@/components/simple/Side'
 import { ApprovalModal } from '@/components/console/ApprovalModal'
 import { ContextInspector, TraceDrawer } from '@/components/console/Drawers'
 import { Toast } from '@/components/console/Feedback'
+import { WatchPanels } from '@/components/watch/WatchPanels'
+import { useWatch } from '@/store/watchStore'
 
 /** Same layout as the loaded console, so nothing jumps when data arrives. */
 function ConsoleSkeleton() {
@@ -40,15 +42,16 @@ export default function Console() {
     if (booted.current) return // StrictMode runs effects twice in dev
     booted.current = true
     document.title = 'Second Brain console'
+    useWatch.getState().init()
     const asked = params.get('scenario') as ScenarioId | null
     // a scenario link starts straight away: show it starting, never the chooser
-    if (asked && ['S1', 'S2', 'S3', 'S4'].includes(asked) && !params.get('run')) useRun.getState().set('starting', asked)
+    if (asked && ['S1', 'S2', 'S3', 'S4', 'S5'].includes(asked) && !params.get('run')) useRun.getState().set('starting', asked)
     useRun.getState().init().then(() => {
       const sc = params.get('scenario') as ScenarioId | null
       const run = params.get('run')
       // a reload re-attaches to the same run; the backend replays its events from the start
       if (run && backend.kind === 'http') useRun.getState().resume(run)
-      else if (sc && ['S1', 'S2', 'S3', 'S4'].includes(sc)) useRun.getState().start(sc)
+      else if (sc && ['S1', 'S2', 'S3', 'S4', 'S5'].includes(sc)) useRun.getState().start(sc)
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -75,6 +78,7 @@ export default function Console() {
         )}
       </main>
       <Panels />
+      <WatchPanels />
       <ApprovalModal />
       <TraceDrawer />
       <ContextInspector />

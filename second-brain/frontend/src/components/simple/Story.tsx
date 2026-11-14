@@ -7,6 +7,10 @@ import { lakhs, rupees } from '@/lib/format'
 import type { AgentId, NodeKind } from '@/lib/types'
 import { Button, kindLabel, Mono, Spinner, severityColor, statusLabel, statusTone } from '../ui'
 import { STAGES, useStages, type StageId, type StageStatus } from './status'
+import { TrustMeter } from '../watch/TrustParts'
+import { VerificationInline } from '../watch/VerificationInline'
+import { NegotiationCard } from '../watch/NegotiationCard'
+import { useWatch } from '@/store/watchStore'
 
 /* ------------------------------------------------------------------ */
 /* Stage shell                                                         */
@@ -176,8 +180,11 @@ function ReadStage() {
   const i = span && msg ? msg.body.indexOf(span) : -1
   const pending = useMemo(() => Object.values(approvals).filter((a) => a.status === 'pending'), [approvals])
   const sponsorName = useRun((s) => s.world?.sponsors.find((x) => x.id === backend.profile.primarySponsor)?.name.split(' ')[0])
+  const clarification = useRun((s) => s.clarification)
+  const watchOn = useWatch((s) => s.enabled)
   if (!msg) return <p className="text-[13px] text-muted">Waiting for the message…</p>
   const quarantined = triage?.verdict === 'suspicious'
+  const unverified = !quarantined && confidence?.trust !== undefined && confidence.trust < (useWatch.getState().policy?.trust_low ?? 0.5)
   return (
     <div>
       <figure className={clsx('rounded-sm border px-4 py-3', quarantined ? 'border-fail/50 bg-fail-soft' : 'border-line-soft bg-bg-2/60')}>
@@ -194,8 +201,10 @@ function ReadStage() {
 
       <dl className="mt-2 divide-y divide-line-soft">
         {triage && (
-          <Fact label="Safe to act on?" tone={quarantined ? 'fail' : undefined}>
-            {quarantined ? <>No. It was quarantined before any agent planned anything: {triage.reasons.join('; ').toLowerCase()}.</> : <>Yes: {triage.reasons.join(', ').toLowerCase()}.</>}
+          <Fact label="Safe to act on?" tone={quarantined ? 'fail' : unverified ? 'wait' : undefined}>
+            {quarantined ? <>No. It was quarantined before any agent planned anything: {triage.reasons.join('; ').toLowerCase()}.</>
+              : unverified ? <>Not yet. It is about a sponsor commitment, but the sender could not be verified (trust {confidence!.trust!.toFixed(2)}), so it is held until someone checks with the real contact.</>
+                : <>Yes: {triage.reasons.join(', ').toLowerCase()}.</>}
           </Fact>
         )}
         {resolution && resolution.entity_id && (
@@ -227,6 +236,7 @@ function ReadStage() {
               </span>
             </span>
             <span className="block text-muted">{BAND_TEXT[confidence.band]}</span>
+            {confidence.trust !== undefined ? <div className="mt-2"><TrustMeter c={confidence} /></div> : (
             <Disclosure label="How this score was worked out">
               <ul className="tnum space-y-0.5 text-[12.5px]">
                 <li className="flex justify-between gap-4 text-muted"><span>Starting point</span><span>0.50</span></li>
@@ -234,11 +244,11 @@ function ReadStage() {
                   <li key={r.label} className="flex justify-between gap-4"><span className="text-muted">{r.label}</span><span className={r.delta >= 0 ? 'text-ok' : 'text-fail'}>{r.delta >= 0 ? '+' : '−'}{Math.abs(r.delta).toFixed(2)}</span></li>
                 ))}
               </ul>
-            </Disclosure>
+            </Disclosure>)}
           </Fact>
         )}
       </dl>
-      {state === 'AWAIT_CLARIFICATION' && <ClarifyInline />}
+      {state === 'AWAIT_CLARIFICATION' && (clarification?.verification_id && watchOn ? <VerificationInline id={clarification.verification_id} /> : <ClarifyInline />)}
       {state === 'AWAIT_CLARIFICATION' && pending.map((ap) => <div key={ap.id}><p className="mt-3 text-[13.5px] font-semibold">{ap.title}</p><ApprovalInline ap={ap} /></div>)}
       {outcome?.kind === 'waiting' && <p className="mt-3 rounded-sm bg-wait-soft px-3 py-2 text-[13px] text-wait">{outcome.text}</p>}
     </div>
@@ -562,7 +572,7 @@ function Starting({ id }: { id: ScenarioId }) {
   const sc = backend.profile.scenarios[id]
   return (
     <section role="status" className="rounded-md border border-text/50 bg-surface px-5 py-4">
-      <p className="flex items-center gap-2 text-[16px] font-bold"><Spinner /> Starting {id}: {sc.name}</p>
+      <p className="flex items-center gap-2 text-[16px] font-bold"><Spinner /> Starting {id}{sc ? `: ${sc.name}` : ''}</p>
       <p className="mt-1 text-[13.5px] text-muted">Resetting the workspace and handing the message to the agents. The steps below fill in as they work.</p>
     </section>
   )
@@ -571,7 +581,7 @@ function Starting({ id }: { id: ScenarioId }) {
 function StartFailed({ id, message }: { id: ScenarioId; message: string }) {
   return (
     <section role="alert" className="rounded-md border border-fail bg-surface px-5 py-4">
-      <p className="text-[16px] font-bold text-fail">{id}: {backend.profile.scenarios[id].name} could not start</p>
+      <p className="text-[16px] font-bold text-fail">{id}{backend.profile.scenarios[id] ? `: ${backend.profile.scenarios[id]!.name}` : ''} could not start</p>
       <p className="mt-1 text-[13.5px] text-muted">{message}</p>
       <p className="mt-1 text-[13px] text-muted">{backend.kind === 'http' ? 'Check that the backend is running (run-demo.ps1 starts it), then try again.' : 'Try again.'}</p>
       <Button variant="primary" className="mt-3" onClick={() => useRun.getState().start(id)}>Try {id} again</Button>
@@ -591,8 +601,8 @@ function Welcome() {
         {(Object.keys(profile.scenarios) as ScenarioId[]).map((id) => (
           <li key={id}>
             <button onClick={() => useRun.getState().start(id)} className="h-full w-full rounded-sm border border-line px-3 py-2.5 text-left hover:border-text/40">
-              <span className="block text-[14px] font-bold">{id}: {profile.scenarios[id].name}{id === 'S1' && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
-              <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{profile.scenarios[id].hint}</span>
+              <span className="block text-[14px] font-bold">{id}: {profile.scenarios[id]!.name}{id === 'S1' && <span className="ml-2 text-[12px] font-semibold text-work">start here</span>}</span>
+              <span className="mt-0.5 block text-[12.5px] leading-snug text-muted">{profile.scenarios[id]!.hint}</span>
             </button>
           </li>
         ))}
@@ -627,6 +637,7 @@ export function Story() {
           <Stage key={s.id} n={i + 1} id={s.id} title={s.title} idle={s.idle} status={stages[s.id]} summary={summaries[s.id]} agents={s.agents}>{content[s.id]}</Stage>
         ))}
       </ol>
+      <NegotiationCard />
     </div>
   )
 }

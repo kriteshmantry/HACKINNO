@@ -11,11 +11,13 @@ import { InboxPanel } from '../console/InboxPanel'
 import { ActionLog } from '../console/ActionLog'
 import { ImpactGraph } from '../console/ImpactGraph'
 import { BeforeAfter } from '../console/BeforeAfter'
+import { RadarRail } from '../watch/Radar'
 
 /** Events worth telling a person about, in their words; the rest stays in the full log. */
 const SHOW = new Set(['run.started', 'message.triaged', 'change.extracted', 'confidence', 'impact', 'options', 'option.chosen', 'plan',
   'approval.requested', 'approval.decided', 'tool.retry', 'tool.failed', 'breaker.open', 'preempted', 'verify.check', 'run.done',
-  'run.escalated', 'run.quarantined', 'run.waiting', 'clarification.requested', 'preference.learned', 'tool.skipped_duplicate'])
+  'run.escalated', 'run.quarantined', 'run.waiting', 'clarification.requested', 'preference.learned', 'tool.skipped_duplicate',
+  'negotiation.available', 'verification.outreach', 'outreach.sent', 'clarification.answered'])
 
 /** Each event as a short sentence a person can follow, whichever backend produced it. */
 function say(e: RunEvent): string {
@@ -37,7 +39,14 @@ function say(e: RunEvent): string {
     case 'tool.skipped_duplicate': return 'Skipped a step that was already applied'
     case 'preempted': return 'Newer information arrived: replanning'
     case 'verify.check': return `Check ${p.check?.id} failed: ${String(p.check?.label ?? '').toLowerCase()}`
-    case 'clarification.requested': return 'Asked you to confirm the amount'
+    case 'clarification.requested': return p.clarification?.low_trust ? 'Held: the sender could not be verified' : 'Asked you to confirm the amount'
+    case 'clarification.answered': return e.message
+    case 'confidence': return p.confidence?.gated_by === 'trust'
+      ? `Sender trust ${Number(p.confidence?.trust).toFixed(2)} is the weak point: ${p.confidence?.band === 'clarify' ? 'held for verification' : 'every change needs your OK'}`
+      : `Confidence ${Number(p.confidence?.score).toFixed(2)}: ${p.confidence?.band === 'autonomous' ? 'can act on low-risk steps' : p.confidence?.band === 'supervised' ? 'every change needs your OK' : 'needs a person to confirm'}`
+    case 'negotiation.available': return p.negotiation?.headline ? `${p.negotiation.headline}: counter-offer drafted` : e.message
+    case 'verification.outreach': return `Asked ${p.to} (contact on file) to confirm`
+    case 'outreach.sent': return e.message
     default: return e.message
   }
 }
@@ -68,6 +77,7 @@ export function SideRail() {
       : /done|decided|chosen/.test(e.type) ? 'ok' : 'faint'
   return (
     <aside className="space-y-3 lg:sticky lg:top-[72px]">
+      <RadarRail />
       <section className="rounded-md border border-line bg-surface px-4 py-3">
         <h2 className="text-[13px] font-bold">Who is working</h2>
         <ul className="mt-2 space-y-1.5">

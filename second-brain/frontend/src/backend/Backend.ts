@@ -16,7 +16,7 @@ export interface BackendProfile {
   treasurerEmail: string
   /** fixed scenario clock used for deadline maths */
   now: string
-  scenarios: Record<ScenarioId, { name: string; hint: string }>
+  scenarios: Partial<Record<ScenarioId, { name: string; hint: string }>>
   caps: {
     /** a newer message can pause a running plan and replan the difference */
     preemption: boolean
